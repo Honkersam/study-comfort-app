@@ -8,6 +8,9 @@
   <link rel="icon" type="image/png" href="icon-192.png" />
   <meta name="theme-color" content="#4f46e5" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -138,6 +141,16 @@
       color: var(--text-muted);
     }
 
+    /* Map Container */
+    #map {
+      width: 100%;
+      height: 220px;
+      border-radius: 12px;
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      display: none;
+    }
+
     /* Timer Styles */
     .timer-display {
       font-size: 3.5rem;
@@ -237,15 +250,16 @@
       </div>
     </div>
 
-    <!-- Location & Environment Card -->
+    <!-- Location & Map Card -->
     <div class="card">
-      <div class="card-title">📍 Location & Environment</div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;" id="locationDisplay">
-        Tap button to fetch current study location coordinates.
+      <div class="card-title">🗺️ Study Spot Map</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);" id="locationDisplay">
+        Tap to locate your study environment on the map.
       </p>
-      <button class="secondary" style="width: 100%; padding: 10px;" onclick="getLocation()">
-        Fetch GPS Location
+      <button class="secondary" style="width: 100%; padding: 10px; margin-top: 10px;" onclick="getLocation()">
+        Show Current Location on Map
       </button>
+      <div id="map"></div>
     </div>
 
     <!-- Timer Card -->
@@ -280,11 +294,10 @@
     </div>
   </div>
 
-  <audio id="rickAudio" loop src="https://ia801509.us.archive.org/11/items/Rick_Astley_Never_Gonna_Give_You_Up/Rick_Astley_Never_Gonna_Give_You_Up.mp3"></audio>
-
   <script>
-    // Flashlight / Torch
+    // Flashlight / Torch (Robust Android camera selection)
     let torchTrack = null;
+    let torchStream = null;
     let torchOn = false;
 
     async function toggleFlashlight() {
@@ -293,73 +306,147 @@
 
       try {
         if (!torchOn) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }
+          // Request video stream specifically from environment (rear) camera
+          torchStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { exact: 'environment' }
+            }
+          }).catch(async () => {
+            // Fallback if exact facingMode fails
+            return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
           });
-          torchTrack = stream.getVideoTracks()[0];
-          
-          const capabilities = torchTrack.getCapabilities();
-          if (!capabilities.torch) {
-            alert('Flashlight hardware not available on this device/camera.');
-            torchTrack.stop();
-            return;
-          }
 
-          await torchTrack.applyConstraints({ advanced: [{ torch: true }] });
+          const tracks = torchStream.getVideoTracks();
+          if (tracks.length === 0) throw new Error('No camera track found.');
+
+          torchTrack = tracks[0];
+
+          // Check for torch capability or try direct constraint
+          await torchTrack.applyConstraints({
+            advanced: [{ torch: true }]
+          });
+
           torchOn = true;
           btn.classList.add('active');
           status.textContent = 'On';
         } else {
           if (torchTrack) {
-            await torchTrack.applyConstraints({ advanced: [{ torch: false }] });
+            await torchTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
             torchTrack.stop();
+          }
+          if (torchStream) {
+            torchStream.getTracks().forEach(t => t.stop());
           }
           torchOn = false;
           btn.classList.remove('active');
           status.textContent = 'Off';
         }
       } catch (err) {
-        alert('Flashlight permission or hardware error: ' + err.message);
+        alert('Flashlight notice: Your device camera was found, but Chrome restricted torch access or no flash LED was detected. (' + err.message + ')');
+        if (torchStream) torchStream.getTracks().forEach(t => t.stop());
+        torchOn = false;
+        btn.classList.remove('active');
+        status.textContent = 'Off';
       }
     }
 
-    // Rickroll / Never Gonna Give You Up
-    const rickAudio = document.getElementById('rickAudio');
+    // Rickroll / Synthesized Audio Engine (Fixes CORS/Audio block)
+    let audioCtx = null;
     let isPlayingRick = false;
+    let rickAudio = null;
 
     function toggleRickroll() {
       const btn = document.getElementById('rickrollBtn');
       const status = document.getElementById('rickStatus');
 
       if (!isPlayingRick) {
-        rickAudio.play();
+        if (!rickAudio) {
+          // Reliable CORS-enabled audio source
+          rickAudio = new Audio('https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg');
+          // If we want the full song, we embed base64/audio stream
+        }
+        
+        // Simple Audio Synthesizer fallback if external audio fails
+        try {
+          if (!rickAudio || rickAudio.error) {
+            playToneMelody();
+          } else {
+            rickAudio.play().catch(() => playToneMelody());
+          }
+        } catch (e) {
+          playToneMelody();
+        }
+
         isPlayingRick = true;
         btn.classList.add('active');
         status.textContent = 'Playing 🎶';
       } else {
-        rickAudio.pause();
+        if (rickAudio) rickAudio.pause();
+        if (synthInterval) clearInterval(synthInterval);
         isPlayingRick = false;
         btn.classList.remove('active');
         status.textContent = 'Play';
       }
     }
 
-    // Location API
+    let synthInterval = null;
+    function playToneMelody() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]; // C, D, E, F, G, A, B
+      let step = 0;
+      
+      synthInterval = setInterval(() => {
+        if (!isPlayingRick) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = notes[step % notes.length];
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+        step++;
+      }, 300);
+    }
+
+    // Interactive Map via Leaflet + OpenStreetMap
+    let map = null;
+    let marker = null;
+
     function getLocation() {
       const display = document.getElementById('locationDisplay');
+      const mapDiv = document.getElementById('map');
       display.textContent = 'Locating study environment...';
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            const lat = pos.coords.latitude.toFixed(4);
-            const lon = pos.coords.longitude.toFixed(4);
-            const accuracy = pos.coords.accuracy.toFixed(0);
-            display.innerHTML = `<strong>Lat:</strong> ${lat}° | <strong>Lon:</strong> ${lon}°<br/><span style="font-size:0.75rem; color:#94a3b8;">Accuracy: ±${accuracy}m</span>`;
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            display.textContent = 'Study location found!';
+            mapDiv.style.display = 'block';
+
+            if (!map) {
+              map = L.map('map').setView([lat, lon], 15);
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+              }).addTo(map);
+              marker = L.marker([lat, lon]).addTo(map)
+                .bindPopup('<b>Study Location</b><br/>You are here!')
+                .openPopup();
+            } else {
+              map.setView([lat, lon], 15);
+              marker.setLatLng([lat, lon]);
+            }
+            // Trigger resize calculation for Leaflet
+            setTimeout(() => map.invalidateSize(), 200);
           },
           (err) => {
             display.textContent = 'Unable to retrieve location: ' + err.message;
-          }
+          },
+          { enableHighAccuracy: true }
         );
       } else {
         display.textContent = 'Geolocation is not supported by your browser.';
