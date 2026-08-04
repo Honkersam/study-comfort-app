@@ -317,11 +317,11 @@
     </div>
   </div>
 
-  <!-- Real Rick Astley Audio File -->
-  <audio id="rickAudio" loop preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73188.mp3?filename=never-gonna-give-you-up-80s-synth-10938.mp3"></audio>
+  <!-- Local Bundled Rick Astley MP3 -->
+  <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Flashlight logic (Hardware LED with automatic full-screen light fallback)
+    // Flashlight logic (Hardware LED with screen light fallback)
     let torchTrack = null;
     let torchStream = null;
     let torchOn = false;
@@ -335,7 +335,6 @@
         return;
       }
 
-      // First try hardware camera flash
       try {
         torchStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { exact: 'environment' } }
@@ -351,16 +350,15 @@
           return;
         }
       } catch (e) {
-        // Hardware torch failed or unsupported constraint
+        // Ignored, fallback below
       }
 
-      // Clean up camera stream if hardware torch didn't work
       if (torchStream) {
         torchStream.getTracks().forEach(t => t.stop());
         torchStream = null;
       }
 
-      // Fallback: Full screen maximum brightness white desk light
+      // Screen light fallback
       document.getElementById('screenTorchOverlay').style.display = 'flex';
       torchOn = true;
       btn.classList.add('active');
@@ -393,86 +391,28 @@
       status.textContent = 'Off';
     }
 
-    // Rick Astley Audio Synthesizer & Music Player
+    // Direct Local Rick Astley Audio Player
     const rickAudio = document.getElementById('rickAudio');
     let isPlayingRick = false;
-    let synthTimer = null;
-    let audioCtx = null;
 
     function toggleRickroll() {
       const btn = document.getElementById('rickrollBtn');
       const status = document.getElementById('rickStatus');
 
       if (!isPlayingRick) {
-        // Play Never Gonna Give You Up (Chorus melody synthesized accurately)
-        playNeverGonnaGiveYouUp();
-        isPlayingRick = true;
-        btn.classList.add('active');
-        status.textContent = 'Playing 🎶';
+        rickAudio.play().then(() => {
+          isPlayingRick = true;
+          btn.classList.add('active');
+          status.textContent = 'Playing 🎶';
+        }).catch(err => {
+          alert('Audio playback error: ' + err.message);
+        });
       } else {
-        stopNeverGonnaGiveYouUp();
+        rickAudio.pause();
         isPlayingRick = false;
         btn.classList.remove('active');
         status.textContent = 'Play';
       }
-    }
-
-    function playNeverGonnaGiveYouUp() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-
-      // "Never Gonna Give You Up" iconic melody notes (Frequencies in Hz)
-      // "Never gonna give you up, Never gonna let you down..."
-      const melody = [
-        { note: 349.23, duration: 0.2 }, // F4 - Nev-
-        { note: 392.00, duration: 0.2 }, // G4 - er
-        { note: 466.16, duration: 0.2 }, // Bb4 - gon-
-        { note: 392.00, duration: 0.2 }, // G4 - na
-        { note: 587.33, duration: 0.4 }, // D5 - give
-        { note: 587.33, duration: 0.4 }, // D5 - you
-        { note: 523.25, duration: 0.6 }, // C5 - up!
-        
-        { note: 349.23, duration: 0.2 }, // F4 - Nev-
-        { note: 392.00, duration: 0.2 }, // G4 - er
-        { note: 466.16, duration: 0.2 }, // Bb4 - gon-
-        { note: 392.00, duration: 0.2 }, // G4 - na
-        { note: 523.25, duration: 0.4 }, // C5 - let
-        { note: 523.25, duration: 0.4 }, // C5 - you
-        { note: 466.16, duration: 0.6 }, // Bb4 - down!
-      ];
-
-      let noteIdx = 0;
-
-      function playNextNote() {
-        if (!isPlayingRick) return;
-
-        const item = melody[noteIdx % melody.length];
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-
-        osc.type = 'triangle'; // Richer 80s synth sound
-        osc.frequency.value = item.note;
-
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + item.duration);
-
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + item.duration);
-
-        noteIdx++;
-        synthTimer = setTimeout(playNextNote, item.duration * 1000 + 50);
-      }
-
-      playNextNote();
-    }
-
-    function stopNeverGonnaGiveYouUp() {
-      if (synthTimer) clearTimeout(synthTimer);
-      if (rickAudio) rickAudio.pause();
     }
 
     // Interactive Map via Leaflet + OpenStreetMap
