@@ -97,6 +97,25 @@
       gap: 8px;
     }
 
+    /* Controls Group */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    select {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      width: 100%;
+      outline: none;
+    }
+
     /* Hardware & Quick Actions */
     .grid-2 {
       display: grid;
@@ -290,11 +309,22 @@
     <div class="card">
       <div class="card-title">🔔 System Notifications</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Test sending a native Android push/system notification nudge.
+        Test heads-up banner notifications with delay for testing outside the app.
       </p>
-      <button class="secondary" style="width: 100%; padding: 10px;" onclick="sendTestNotification()">
-        Send Test Push Notification
+
+      <div class="control-row">
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Send Delay:</label>
+        <select id="notifDelay">
+          <option value="0">Send Immediately</option>
+          <option value="5">5 Seconds Delay (Close / Leave App now!)</option>
+          <option value="10">10 Seconds Delay</option>
+        </select>
+      </div>
+
+      <button id="notifBtn" class="secondary" style="width: 100%; padding: 10px;" onclick="scheduleNotification()">
+        Schedule Push Notification
       </button>
+      <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
     </div>
 
     <!-- Microphone & Noise Monitor Card -->
@@ -322,7 +352,7 @@
       <div class="grid-2">
         <!-- Flashlight -->
         <div class="action-card" id="flashlightBtn" onclick="toggleFlashlight()">
-          <span class="action-icon">flashlight</span>
+          <span class="action-icon">🔦</span>
           <span class="action-label">Desk Light</span>
           <span class="status-text" id="torchStatus">Off</span>
         </div>
@@ -383,38 +413,57 @@
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Push Notifications API
-    async function sendTestNotification() {
+    // Push Notifications API with Heads-Up Popups, Haptics, & Selectable Delay
+    async function scheduleNotification() {
       if (!('Notification' in window)) {
         alert('This browser/device does not support notifications.');
         return;
       }
 
       let permission = Notification.permission;
-
       if (permission !== 'granted') {
         permission = await Notification.requestPermission();
       }
 
-      if (permission === 'granted') {
-        // Trigger notification through Service Worker for native lock screen/tray appearance
+      if (permission !== 'granted') {
+        alert('Notification permission was denied.');
+        return;
+      }
+
+      // Hardware haptic vibration test directly
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200, 100, 300]);
+      }
+
+      const delaySeconds = parseInt(document.getElementById('notifDelay').value, 10);
+      const statusDiv = document.getElementById('notifStatus');
+
+      if (delaySeconds > 0) {
+        statusDiv.textContent = `Notification scheduled! Exit/minimize the app now (${delaySeconds}s)...`;
+      } else {
+        statusDiv.textContent = 'Sending notification now...';
+      }
+
+      setTimeout(async () => {
+        statusDiv.textContent = '';
+
+        const options = {
+          body: '🧘 Time for a quick posture & eye comfort check!',
+          icon: 'icon-192.png',
+          badge: 'badge-96.png',
+          vibrate: [300, 100, 300, 100, 300], // High urgency vibration pattern
+          renotify: true,
+          tag: 'study-comfort-alert',
+          requireInteraction: false
+        };
+
         if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
           const reg = await navigator.serviceWorker.ready;
-          reg.showNotification('Protogen Study Comfort', {
-            body: '🧘 Time for a quick posture & eye comfort check!',
-            icon: 'icon-192.png',
-            badge: 'icon-192.png',
-            vibrate: [200, 100, 200]
-          });
+          reg.showNotification('Protogen Study Comfort', options);
         } else {
-          new Notification('Protogen Study Comfort', {
-            body: '🧘 Time for a quick posture & eye comfort check!',
-            icon: 'icon-192.png'
-          });
+          new Notification('Protogen Study Comfort', options);
         }
-      } else {
-        alert('Notification permission was denied.');
-      }
+      }, delaySeconds * 1000);
     }
 
     // Microphone Live Noise Level Monitor
