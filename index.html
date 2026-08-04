@@ -151,6 +151,22 @@
       display: none;
     }
 
+    /* Screen Torch Overlay */
+    #screenTorchOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #ffffff;
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: #000;
+    }
+
     /* Timer Styles */
     .timer-display {
       font-size: 3.5rem;
@@ -223,6 +239,13 @@
 </head>
 <body>
 
+  <!-- Full Screen Flashlight Fallback Overlay -->
+  <div id="screenTorchOverlay" onclick="closeScreenTorch()">
+    <div style="font-size: 4rem; margin-bottom: 20px;">💡</div>
+    <div style="font-size: 1.2rem; font-weight: 700;">Screen Desk Light Active</div>
+    <div style="font-size: 0.9rem; color: #666; margin-top: 8px;">Tap anywhere to turn off</div>
+  </div>
+
   <div class="container">
     <header>
       <img src="icon-192.png" alt="Protogen Companion" class="avatar" />
@@ -294,8 +317,11 @@
     </div>
   </div>
 
+  <!-- Real Rick Astley Audio File -->
+  <audio id="rickAudio" loop preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73188.mp3?filename=never-gonna-give-you-up-80s-synth-10938.mp3"></audio>
+
   <script>
-    // Flashlight / Torch (Robust Android camera selection)
+    // Flashlight logic (Hardware LED with automatic full-screen light fallback)
     let torchTrack = null;
     let torchStream = null;
     let torchOn = false;
@@ -304,111 +330,149 @@
       const btn = document.getElementById('flashlightBtn');
       const status = document.getElementById('torchStatus');
 
+      if (torchOn) {
+        turnOffTorch();
+        return;
+      }
+
+      // First try hardware camera flash
       try {
-        if (!torchOn) {
-          // Request video stream specifically from environment (rear) camera
-          torchStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { exact: 'environment' }
-            }
-          }).catch(async () => {
-            // Fallback if exact facingMode fails
-            return await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          });
+        torchStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { exact: 'environment' } }
+        }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
 
-          const tracks = torchStream.getVideoTracks();
-          if (tracks.length === 0) throw new Error('No camera track found.');
-
-          torchTrack = tracks[0];
-
-          // Check for torch capability or try direct constraint
-          await torchTrack.applyConstraints({
-            advanced: [{ torch: true }]
-          });
-
+        const track = torchStream.getVideoTracks()[0];
+        if (track && track.getCapabilities && track.getCapabilities().torch) {
+          await track.applyConstraints({ advanced: [{ torch: true }] });
+          torchTrack = track;
           torchOn = true;
           btn.classList.add('active');
-          status.textContent = 'On';
-        } else {
-          if (torchTrack) {
-            await torchTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
-            torchTrack.stop();
-          }
-          if (torchStream) {
-            torchStream.getTracks().forEach(t => t.stop());
-          }
-          torchOn = false;
-          btn.classList.remove('active');
-          status.textContent = 'Off';
+          status.textContent = 'Hardware On';
+          return;
         }
-      } catch (err) {
-        alert('Flashlight notice: Your device camera was found, but Chrome restricted torch access or no flash LED was detected. (' + err.message + ')');
-        if (torchStream) torchStream.getTracks().forEach(t => t.stop());
-        torchOn = false;
-        btn.classList.remove('active');
-        status.textContent = 'Off';
+      } catch (e) {
+        // Hardware torch failed or unsupported constraint
       }
+
+      // Clean up camera stream if hardware torch didn't work
+      if (torchStream) {
+        torchStream.getTracks().forEach(t => t.stop());
+        torchStream = null;
+      }
+
+      // Fallback: Full screen maximum brightness white desk light
+      document.getElementById('screenTorchOverlay').style.display = 'flex';
+      torchOn = true;
+      btn.classList.add('active');
+      status.textContent = 'Screen Light On';
     }
 
-    // Rickroll / Synthesized Audio Engine (Fixes CORS/Audio block)
-    let audioCtx = null;
+    function closeScreenTorch() {
+      document.getElementById('screenTorchOverlay').style.display = 'none';
+      turnOffTorch();
+    }
+
+    function turnOffTorch() {
+      const btn = document.getElementById('flashlightBtn');
+      const status = document.getElementById('torchStatus');
+      
+      document.getElementById('screenTorchOverlay').style.display = 'none';
+
+      if (torchTrack) {
+        torchTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+        torchTrack.stop();
+        torchTrack = null;
+      }
+      if (torchStream) {
+        torchStream.getTracks().forEach(t => t.stop());
+        torchStream = null;
+      }
+
+      torchOn = false;
+      btn.classList.remove('active');
+      status.textContent = 'Off';
+    }
+
+    // Rick Astley Audio Synthesizer & Music Player
+    const rickAudio = document.getElementById('rickAudio');
     let isPlayingRick = false;
-    let rickAudio = null;
+    let synthTimer = null;
+    let audioCtx = null;
 
     function toggleRickroll() {
       const btn = document.getElementById('rickrollBtn');
       const status = document.getElementById('rickStatus');
 
       if (!isPlayingRick) {
-        if (!rickAudio) {
-          // Reliable CORS-enabled audio source
-          rickAudio = new Audio('https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg');
-          // If we want the full song, we embed base64/audio stream
-        }
-        
-        // Simple Audio Synthesizer fallback if external audio fails
-        try {
-          if (!rickAudio || rickAudio.error) {
-            playToneMelody();
-          } else {
-            rickAudio.play().catch(() => playToneMelody());
-          }
-        } catch (e) {
-          playToneMelody();
-        }
-
+        // Play Never Gonna Give You Up (Chorus melody synthesized accurately)
+        playNeverGonnaGiveYouUp();
         isPlayingRick = true;
         btn.classList.add('active');
         status.textContent = 'Playing 🎶';
       } else {
-        if (rickAudio) rickAudio.pause();
-        if (synthInterval) clearInterval(synthInterval);
+        stopNeverGonnaGiveYouUp();
         isPlayingRick = false;
         btn.classList.remove('active');
         status.textContent = 'Play';
       }
     }
 
-    let synthInterval = null;
-    function playToneMelody() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const notes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]; // C, D, E, F, G, A, B
-      let step = 0;
-      
-      synthInterval = setInterval(() => {
+    function playNeverGonnaGiveYouUp() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // "Never Gonna Give You Up" iconic melody notes (Frequencies in Hz)
+      // "Never gonna give you up, Never gonna let you down..."
+      const melody = [
+        { note: 349.23, duration: 0.2 }, // F4 - Nev-
+        { note: 392.00, duration: 0.2 }, // G4 - er
+        { note: 466.16, duration: 0.2 }, // Bb4 - gon-
+        { note: 392.00, duration: 0.2 }, // G4 - na
+        { note: 587.33, duration: 0.4 }, // D5 - give
+        { note: 587.33, duration: 0.4 }, // D5 - you
+        { note: 523.25, duration: 0.6 }, // C5 - up!
+        
+        { note: 349.23, duration: 0.2 }, // F4 - Nev-
+        { note: 392.00, duration: 0.2 }, // G4 - er
+        { note: 466.16, duration: 0.2 }, // Bb4 - gon-
+        { note: 392.00, duration: 0.2 }, // G4 - na
+        { note: 523.25, duration: 0.4 }, // C5 - let
+        { note: 523.25, duration: 0.4 }, // C5 - you
+        { note: 466.16, duration: 0.6 }, // Bb4 - down!
+      ];
+
+      let noteIdx = 0;
+
+      function playNextNote() {
         if (!isPlayingRick) return;
+
+        const item = melody[noteIdx % melody.length];
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = notes[step % notes.length];
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+
+        osc.type = 'triangle'; // Richer 80s synth sound
+        osc.frequency.value = item.note;
+
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + item.duration);
+
         osc.connect(gain);
         gain.connect(audioCtx.destination);
+
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
-        step++;
-      }, 300);
+        osc.stop(audioCtx.currentTime + item.duration);
+
+        noteIdx++;
+        synthTimer = setTimeout(playNextNote, item.duration * 1000 + 50);
+      }
+
+      playNextNote();
+    }
+
+    function stopNeverGonnaGiveYouUp() {
+      if (synthTimer) clearTimeout(synthTimer);
+      if (rickAudio) rickAudio.pause();
     }
 
     // Interactive Map via Leaflet + OpenStreetMap
@@ -440,7 +504,6 @@
               map.setView([lat, lon], 15);
               marker.setLatLng([lat, lon]);
             }
-            // Trigger resize calculation for Leaflet
             setTimeout(() => map.invalidateSize(), 200);
           },
           (err) => {
