@@ -286,20 +286,15 @@
       <p class="subtitle">Protogen Study Comfort Companion</p>
     </header>
 
-    <!-- Notification Test Card -->
+    <!-- Notifications Testing Card -->
     <div class="card">
       <div class="card-title">🔔 System Notifications</div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;" id="notifStatus">
-        Test sending a system push notification to your phone.
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Test sending a native Android push/system notification nudge.
       </p>
-      <div class="grid-2">
-        <button class="secondary" style="padding: 10px; font-size: 0.85rem;" onclick="sendNotification(false)">
-          Send Immediate Notification
-        </button>
-        <button style="padding: 10px; font-size: 0.85rem;" onclick="sendNotification(true)">
-          5s Delayed Notification
-        </button>
-      </div>
+      <button class="secondary" style="width: 100%; padding: 10px;" onclick="sendTestNotification()">
+        Send Test Push Notification
+      </button>
     </div>
 
     <!-- Microphone & Noise Monitor Card -->
@@ -327,7 +322,7 @@
       <div class="grid-2">
         <!-- Flashlight -->
         <div class="action-card" id="flashlightBtn" onclick="toggleFlashlight()">
-          <span class="action-icon">🔦</span>
+          <span class="action-icon">flashlight</span>
           <span class="action-label">Desk Light</span>
           <span class="status-text" id="torchStatus">Off</span>
         </div>
@@ -388,53 +383,37 @@
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Push Notification Logic
-    async function sendNotification(delay = false) {
-      const notifStatus = document.getElementById('notifStatus');
-
+    // Push Notifications API
+    async function sendTestNotification() {
       if (!('Notification' in window)) {
-        alert('Notifications are not supported by this browser.');
+        alert('This browser/device does not support notifications.');
         return;
       }
 
       let permission = Notification.permission;
-      if (permission === 'default') {
+
+      if (permission !== 'granted') {
         permission = await Notification.requestPermission();
       }
 
-      if (permission !== 'granted') {
-        notifStatus.textContent = 'Notification permission denied. Enable in Chrome settings.';
-        notifStatus.style.color = 'var(--danger)';
-        return;
-      }
-
-      notifStatus.style.color = 'var(--text-muted)';
-
-      const trigger = () => {
-        const title = '🧘 Study Comfort Check';
-        const options = {
-          body: 'Time to roll your shoulders, hydrate, and rest your eyes!',
-          icon: 'icon-192.png',
-          badge: 'icon-192.png',
-          vibrate: [200, 100, 200],
-          tag: 'comfort-break'
-        };
-
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, options);
+      if (permission === 'granted') {
+        // Trigger notification through Service Worker for native lock screen/tray appearance
+        if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+          const reg = await navigator.serviceWorker.ready;
+          reg.showNotification('Protogen Study Comfort', {
+            body: '🧘 Time for a quick posture & eye comfort check!',
+            icon: 'icon-192.png',
+            badge: 'icon-192.png',
+            vibrate: [200, 100, 200]
           });
         } else {
-          new Notification(title, options);
+          new Notification('Protogen Study Comfort', {
+            body: '🧘 Time for a quick posture & eye comfort check!',
+            icon: 'icon-192.png'
+          });
         }
-      };
-
-      if (delay) {
-        notifStatus.textContent = 'Notification scheduled in 5 seconds... lock screen or switch apps now to test!';
-        setTimeout(trigger, 5000);
       } else {
-        notifStatus.textContent = 'Notification sent!';
-        trigger();
+        alert('Notification permission was denied.');
       }
     }
 
