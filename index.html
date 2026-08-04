@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Study Comfort</title>
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
   <meta name="theme-color" content="#4f46e5" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -16,6 +17,7 @@
       --accent: #6366f1;
       --accent-hover: #4f46e5;
       --success: #22c55e;
+      --danger: #ef4444;
       --border: #334155;
     }
 
@@ -47,6 +49,19 @@
     header {
       text-align: center;
       padding: 10px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+      margin-bottom: 12px;
+      object-fit: cover;
     }
 
     h1 {
@@ -78,6 +93,52 @@
       gap: 8px;
     }
 
+    /* Hardware & Quick Actions */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .action-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .action-card:active {
+      transform: scale(0.96);
+    }
+
+    .action-card.active {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.15);
+    }
+
+    .action-icon {
+      font-size: 1.8rem;
+    }
+
+    .action-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Timer Styles */
     .timer-display {
       font-size: 3.5rem;
       font-weight: 800;
@@ -151,9 +212,41 @@
 
   <div class="container">
     <header>
+      <img src="icon-192.png" alt="Protogen Companion" class="avatar" />
       <h1>Hello World 👋</h1>
-      <p class="subtitle">Study Comfort Companion (PWA Demo)</p>
+      <p class="subtitle">Protogen Study Comfort Companion</p>
     </header>
+
+    <!-- Hardware Controls Card -->
+    <div class="card">
+      <div class="card-title">⚡ Hardware & Quick Tools</div>
+      <div class="grid-2">
+        <!-- Flashlight -->
+        <div class="action-card" id="flashlightBtn" onclick="toggleFlashlight()">
+          <span class="action-icon">🔦</span>
+          <span class="action-label">Desk Light</span>
+          <span class="status-text" id="torchStatus">Off</span>
+        </div>
+
+        <!-- Never Gonna Give You Up -->
+        <div class="action-card" id="rickrollBtn" onclick="toggleRickroll()">
+          <span class="action-icon">🎵</span>
+          <span class="action-label">Focus Anthem</span>
+          <span class="status-text" id="rickStatus">Play</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Location & Environment Card -->
+    <div class="card">
+      <div class="card-title">📍 Location & Environment</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;" id="locationDisplay">
+        Tap button to fetch current study location coordinates.
+      </p>
+      <button class="secondary" style="width: 100%; padding: 10px;" onclick="getLocation()">
+        Fetch GPS Location
+      </button>
+    </div>
 
     <!-- Timer Card -->
     <div class="card">
@@ -187,7 +280,93 @@
     </div>
   </div>
 
+  <audio id="rickAudio" loop src="https://ia801509.us.archive.org/11/items/Rick_Astley_Never_Gonna_Give_You_Up/Rick_Astley_Never_Gonna_Give_You_Up.mp3"></audio>
+
   <script>
+    // Flashlight / Torch
+    let torchTrack = null;
+    let torchOn = false;
+
+    async function toggleFlashlight() {
+      const btn = document.getElementById('flashlightBtn');
+      const status = document.getElementById('torchStatus');
+
+      try {
+        if (!torchOn) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+          });
+          torchTrack = stream.getVideoTracks()[0];
+          
+          const capabilities = torchTrack.getCapabilities();
+          if (!capabilities.torch) {
+            alert('Flashlight hardware not available on this device/camera.');
+            torchTrack.stop();
+            return;
+          }
+
+          await torchTrack.applyConstraints({ advanced: [{ torch: true }] });
+          torchOn = true;
+          btn.classList.add('active');
+          status.textContent = 'On';
+        } else {
+          if (torchTrack) {
+            await torchTrack.applyConstraints({ advanced: [{ torch: false }] });
+            torchTrack.stop();
+          }
+          torchOn = false;
+          btn.classList.remove('active');
+          status.textContent = 'Off';
+        }
+      } catch (err) {
+        alert('Flashlight permission or hardware error: ' + err.message);
+      }
+    }
+
+    // Rickroll / Never Gonna Give You Up
+    const rickAudio = document.getElementById('rickAudio');
+    let isPlayingRick = false;
+
+    function toggleRickroll() {
+      const btn = document.getElementById('rickrollBtn');
+      const status = document.getElementById('rickStatus');
+
+      if (!isPlayingRick) {
+        rickAudio.play();
+        isPlayingRick = true;
+        btn.classList.add('active');
+        status.textContent = 'Playing 🎶';
+      } else {
+        rickAudio.pause();
+        isPlayingRick = false;
+        btn.classList.remove('active');
+        status.textContent = 'Play';
+      }
+    }
+
+    // Location API
+    function getLocation() {
+      const display = document.getElementById('locationDisplay');
+      display.textContent = 'Locating study environment...';
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude.toFixed(4);
+            const lon = pos.coords.longitude.toFixed(4);
+            const accuracy = pos.coords.accuracy.toFixed(0);
+            display.innerHTML = `<strong>Lat:</strong> ${lat}° | <strong>Lon:</strong> ${lon}°<br/><span style="font-size:0.75rem; color:#94a3b8;">Accuracy: ±${accuracy}m</span>`;
+          },
+          (err) => {
+            display.textContent = 'Unable to retrieve location: ' + err.message;
+          }
+        );
+      } else {
+        display.textContent = 'Geolocation is not supported by your browser.';
+      }
+    }
+
+    // Timer Logic
     let timeLeft = 25 * 60;
     let timerId = null;
 
@@ -230,6 +409,7 @@
       startBtn.textContent = 'Start';
     });
 
+    // Chart logic
     const ctx = document.getElementById('comfortChart').getContext('2d');
     const initialData = [3, 4, 2, 5, 4, 3, 4];
     
