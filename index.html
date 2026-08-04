@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Comfort</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#4f46e5" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --success: #22c55e;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    header {
+      text-align: center;
+      padding: 10px 0;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .timer-display {
+      font-size: 3.5rem;
+      font-weight: 800;
+      font-family: monospace;
+      text-align: center;
+      letter-spacing: 2px;
+      color: var(--accent);
+      margin: 10px 0;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 15px;
+    }
+
+    button {
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.secondary {
+      background-color: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .rating-buttons {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .rating-btn {
+      flex: 1;
+      padding: 10px 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+    }
+
+    .rating-btn.active {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--text);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 200px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Hello World 👋</h1>
+      <p class="subtitle">Study Comfort Companion (PWA Demo)</p>
+    </header>
+
+    <!-- Timer Card -->
+    <div class="card">
+      <div class="card-title">⏱️ Study Session Timer</div>
+      <div class="timer-display" id="timer">25:00</div>
+      <div class="button-group">
+        <button id="startBtn">Start</button>
+        <button id="resetBtn" class="secondary">Reset</button>
+      </div>
+    </div>
+
+    <!-- Comfort Check-in Card -->
+    <div class="card">
+      <div class="card-title">💆 Log Comfort Level</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">How comfortable is your body/focus right now?</p>
+      <div class="rating-buttons">
+        <button class="rating-btn" onclick="logComfort(1)">😩 1</button>
+        <button class="rating-btn" onclick="logComfort(2)">😕 2</button>
+        <button class="rating-btn" onclick="logComfort(3)">😐 3</button>
+        <button class="rating-btn" onclick="logComfort(4)">🙂 4</button>
+        <button class="rating-btn" onclick="logComfort(5)">😌 5</button>
+      </div>
+    </div>
+
+    <!-- Graph Card -->
+    <div class="card">
+      <div class="card-title">📊 Weekly Comfort Score</div>
+      <div class="chart-container">
+        <canvas id="comfortChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let timeLeft = 25 * 60;
+    let timerId = null;
+
+    const timerDisplay = document.getElementById('timer');
+    const startBtn = document.getElementById('startBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function updateDisplay() {
+      const minutes = Math.floor(timeLeft / 60);
+      const seconds = timeLeft % 60;
+      timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (timerId === null) {
+        timerId = setInterval(() => {
+          if (timeLeft > 0) {
+            timeLeft--;
+            updateDisplay();
+          } else {
+            clearInterval(timerId);
+            timerId = null;
+            startBtn.textContent = 'Start';
+            alert('Time for a comfort break!');
+          }
+        }, 1000);
+        startBtn.textContent = 'Pause';
+      } else {
+        clearInterval(timerId);
+        timerId = null;
+        startBtn.textContent = 'Start';
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      clearInterval(timerId);
+      timerId = null;
+      timeLeft = 25 * 60;
+      updateDisplay();
+      startBtn.textContent = 'Start';
+    });
+
+    const ctx = document.getElementById('comfortChart').getContext('2d');
+    const initialData = [3, 4, 2, 5, 4, 3, 4];
+    
+    const comfortChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [{
+          label: 'Comfort (1-5)',
+          data: initialData,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99, 102, 241, 0.15)',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: '#818cf8',
+          pointRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: 1,
+            max: 5,
+            ticks: { stepSize: 1, color: '#94a3b8' },
+            grid: { color: '#334155' }
+          },
+          x: {
+            ticks: { color: '#94a3b8' },
+            grid: { display: false }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    function logComfort(score) {
+      comfortChart.data.datasets[0].data[6] = score;
+      comfortChart.update();
+      
+      document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
+        if (idx + 1 === score) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(err => console.log('SW reg error:', err));
+    }
+  </script>
+</body>
+</html>
