@@ -1,20 +1,26 @@
 package app.studycomfort.protogen;
 
+import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private static final int PERMISSION_REQUEST_CODE = 1234;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Auto-grant HTML5 webview permissions (Microphone/Audio/Camera) once Android system permission is granted
+        // Auto-grant HTML5 webview permissions once Android OS permits them
         WebView webView = this.getBridge().getWebView();
         if (webView != null) {
             webView.setWebChromeClient(new WebChromeClient() {
@@ -30,7 +36,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
-        // Create High Priority Notification Channel for Heads-Up Banners
+        // Create High Importance Notification Channel for Heads-Up Banners & Sound
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             String channelId = "comfort_alerts";
             CharSequence name = "High Importance Study Reminders";
@@ -45,6 +51,43 @@ public class MainActivity extends BridgeActivity {
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(channel);
+            }
+        }
+
+        // Request all required runtime permissions directly at native Java activity startup
+        requestNativePermissions();
+    }
+
+    private void requestNativePermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String[] permissions;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions = new String[]{
+                    Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                    Manifest.permission.CAMERA
+                };
+            } else {
+                permissions = new String[]{
+                    Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.CAMERA
+                };
+            }
+
+            boolean needsPrompt = false;
+            for (String perm : permissions) {
+                if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                    needsPrompt = true;
+                    break;
+                }
+            }
+
+            if (needsPrompt) {
+                ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE);
             }
         }
     }

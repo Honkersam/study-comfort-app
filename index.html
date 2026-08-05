@@ -283,12 +283,12 @@
 
     <!-- Permissions Request Banner Card -->
     <div class="card" style="border-color: var(--accent);">
-      <div class="card-title">🔑 App Permissions Setup</div>
+      <div class="card-title">🔑 Native App Permissions Setup</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Grant Android native permissions for Notifications, Microphone, and Location.
+        Triggers native Android prompts for Notifications, Microphone, Camera, and Geolocation.
       </p>
       <button style="width: 100%; padding: 12px; background: var(--accent);" onclick="requestAllPermissions()">
-        Grant Native Android Permissions
+        Grant All Native Permissions
       </button>
       <div id="permStatus" style="font-size: 0.8rem; color: var(--success); margin-top: 8px; text-align: center;"></div>
     </div>
@@ -401,41 +401,44 @@
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Helper to obtain Capacitor LocalNotifications Plugin safely
-    function getLocalNotifPlugin() {
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
-        return window.Capacitor.Plugins.LocalNotifications;
+    // Capacitor Plugin helper
+    function getCapPlugin(name) {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) {
+        return window.Capacitor.Plugins[name];
       }
       return null;
     }
 
-    // Request All Native Android Permissions
+    // Request All Native Android Permissions sequentially
     async function requestAllPermissions() {
       const status = document.getElementById('permStatus');
-      status.textContent = 'Requesting native Android permissions...';
+      status.textContent = 'Requesting Native Android Permissions...';
 
       try {
-        const notifPlugin = getLocalNotifPlugin();
+        // 1. Local Notifications
+        const notifPlugin = getCapPlugin('LocalNotifications');
         if (notifPlugin) {
-          await notifPlugin.requestPermissions();
+          await notifPlugin.requestPermissions().catch(e => console.warn('Notif perm:', e));
         }
 
-        // Prompt Mic permission
+        // 2. Geolocation
+        const geoPlugin = getCapPlugin('Geolocation');
+        if (geoPlugin) {
+          await geoPlugin.requestPermissions().catch(e => console.warn('Geo perm:', e));
+        }
+
+        // 3. Microphone HTML5 Audio Stream Prompt
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
-            console.warn('Mic error:', err);
+            console.warn('Mic perm error:', err);
             return null;
           });
           if (stream) stream.getTracks().forEach(t => t.stop());
         }
 
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 3000 });
-        }
-
-        status.textContent = 'Permission dialogs prompted!';
+        status.textContent = 'Permissions prompted!';
       } catch (err) {
-        status.textContent = 'Permission prompt error: ' + err.message;
+        status.textContent = 'Prompt error: ' + err.message;
       }
     }
 
@@ -470,12 +473,12 @@
       const statusDiv = document.getElementById('notifStatus');
 
       if (delaySeconds > 0) {
-        statusDiv.textContent = `Scheduled! Exit/minimize the app now (${delaySeconds}s)...`;
+        statusDiv.textContent = `Scheduled! Close / exit app now (${delaySeconds}s)...`;
       } else {
         statusDiv.textContent = 'Sending notification now...';
       }
 
-      const notifPlugin = getLocalNotifPlugin();
+      const notifPlugin = getCapPlugin('LocalNotifications');
 
       if (notifPlugin) {
         try {
@@ -486,7 +489,7 @@
             return;
           }
 
-          const notifId = Math.floor(Math.random() * 100000);
+          const notifId = Math.floor(Math.random() * 100000) + 1;
           const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
 
           await notifPlugin.schedule({
@@ -496,29 +499,19 @@
                 body: '🧘 Time for a quick posture & eye comfort check!',
                 id: notifId,
                 schedule: { at: scheduleTime },
-                channelId: 'comfort_alerts' // Uses high priority channel from MainActivity.java
+                channelId: 'comfort_alerts' // Uses HIGH importance channel created in MainActivity.java
               }
             ]
           });
 
-          if (delaySeconds === 0) {
-            statusDiv.textContent = 'Notification dispatched!';
-          }
+          statusDiv.textContent = 'Notification scheduled successfully!';
 
         } catch (err) {
           alert('LocalNotification Error: ' + err.message);
-          statusDiv.textContent = 'Error sending notification';
+          statusDiv.textContent = 'Error scheduling notification';
         }
       } else {
-        // Fallback for non-Capacitor web context
-        setTimeout(() => {
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Protogen Study Comfort', {
-              body: '🧘 Time for a quick posture & eye comfort check!'
-            });
-          }
-          statusDiv.textContent = 'Fallback notification dispatched';
-        }, delaySeconds * 1000);
+        alert('Capacitor LocalNotifications plugin not ready on window.');
       }
     }
 
@@ -593,7 +586,7 @@
           updateNoiseLevel();
 
         } catch (err) {
-          alert('Microphone permission error: ' + err.message + '\nMake sure to grant microphone access in Android Settings > Apps > Study Comfort.');
+          alert('Microphone permission error: ' + err.message + '\nIf denied, enable Microphone in Android Settings > Apps > Study Comfort.');
         }
       } else {
         stopMicMonitor();
@@ -642,44 +635,54 @@
       }
     }
 
-    // Interactive Map via Leaflet + OpenStreetMap
+    // Interactive Map via Capacitor Geolocation / Leaflet + OpenStreetMap
     let map = null;
     let marker = null;
 
-    function getLocation() {
+    async function getLocation() {
       const display = document.getElementById('locationDisplay');
       const mapDiv = document.getElementById('map');
       display.textContent = 'Locating study environment...';
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            display.textContent = 'Study location found!';
-            mapDiv.style.display = 'block';
+      const geoPlugin = getCapPlugin('Geolocation');
 
-            if (!map) {
-              map = L.map('map').setView([lat, lon], 15);
-              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-              }).addTo(map);
-              marker = L.marker([lat, lon]).addTo(map)
-                .bindPopup('<b>Study Location</b><br/>You are here!')
-                .openPopup();
-            } else {
-              map.setView([lat, lon], 15);
-              marker.setLatLng([lat, lon]);
-            }
-            setTimeout(() => map.invalidateSize(), 200);
-          },
-          (err) => {
-            display.textContent = 'Unable to retrieve location: ' + err.message;
-          },
-          { enableHighAccuracy: true }
-        );
-      } else {
-        display.textContent = 'Geolocation is not supported by your browser.';
+      try {
+        let lat, lon;
+
+        if (geoPlugin) {
+          await geoPlugin.requestPermissions();
+          const pos = await geoPlugin.getCurrentPosition({ enableHighAccuracy: true });
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        } else if (navigator.geolocation) {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+          });
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        } else {
+          throw new Error('Geolocation unavailable');
+        }
+
+        display.textContent = 'Study location found!';
+        mapDiv.style.display = 'block';
+
+        if (!map) {
+          map = L.map('map').setView([lat, lon], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+          }).addTo(map);
+          marker = L.marker([lat, lon]).addTo(map)
+            .bindPopup('<b>Study Location</b><br/>You are here!')
+            .openPopup();
+        } else {
+          map.setView([lat, lon], 15);
+          marker.setLatLng([lat, lon]);
+        }
+        setTimeout(() => map.invalidateSize(), 200);
+
+      } catch (err) {
+        display.textContent = 'Unable to retrieve location: ' + err.message;
       }
     }
 
