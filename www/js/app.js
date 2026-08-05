@@ -61,7 +61,7 @@ function toggleFlashlight() {
   }
 }
 
-// Fixed Push / Local Notification Dispatch (Checks permission before prompting & uses 5-second future date for AlarmManager batching)
+// Fixed Push / Local Notification Dispatch
 async function scheduleNotification() {
   const statusDiv = document.getElementById('notifStatus');
   statusDiv.textContent = 'Scheduling notification...';
@@ -85,7 +85,6 @@ async function scheduleNotification() {
       }
 
       const notifId = Math.floor(Math.random() * 100000) + 1;
-      // Use 5 seconds into the future so Android AlarmManager batches it accurately
       const scheduleTime = new Date(Date.now() + 5000);
 
       await notifPlugin.schedule({
@@ -111,7 +110,7 @@ async function scheduleNotification() {
   }
 }
 
-// Microphone Live Noise Level Monitor with Explicit Exception Handling
+// Microphone Live Noise Level Monitor with Explicit Non-Enumerable Error Logging & Permission Query
 let micStream = null;
 let micContext = null;
 let micAnalyser = null;
@@ -126,6 +125,17 @@ async function toggleMicMonitor() {
 
   if (!isMonitoringMic) {
     try {
+      // 1. Check microphone permission state explicitly via Permissions API
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'microphone' });
+          alert(`Permissions API Microphone State: ${perm.state}`);
+        } catch (permErr) {
+          console.warn('Permissions query err:', permErr);
+        }
+      }
+
+      // 2. Request audio stream
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = micContext.createMediaStreamSource(micStream);
@@ -151,7 +161,6 @@ async function toggleMicMonitor() {
         }
         const rms = Math.sqrt(sum / dataArray.length);
 
-        // Relative noise level mapping (0 to 100%)
         let estimatedDb = Math.round(30 + (rms / 255) * 60);
         if (estimatedDb < 30) estimatedDb = 30;
 
@@ -182,9 +191,14 @@ async function toggleMicMonitor() {
 
       updateNoiseLevel();
 
-    } catch (e) {
-      console.error("Microphone error:", e);
-      alert("Microphone Exception:\n" + JSON.stringify(e, Object.getOwnPropertyNames(e)));
+    } catch (err) {
+      console.error("Microphone error:", err);
+      alert(
+        `Microphone Exception Details:\n` +
+        `Name: ${err.name}\n` +
+        `Message: ${err.message}\n` +
+        `String: ${err.toString()}`
+      );
       return;
     }
   } else {
