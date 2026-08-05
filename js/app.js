@@ -8,9 +8,15 @@ function controlLed(state) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'message=' + encodeURIComponent(state)
   })
-  .then(res => res.text())
+  .then(res => {
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.text();
+  })
   .then(text => { statusEl.textContent = text; })
-  .catch(err => { statusEl.textContent = 'Could not reach local Node.js server.'; });
+  .catch(err => { 
+    console.error("Fetch Error:", err);
+    statusEl.textContent = `Error: ${err.name} - ${err.message}`; 
+  });
 }
 
 // Send Message to Arduino Local Server
@@ -24,12 +30,16 @@ function sendMessage() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'message=' + encodeURIComponent(message)
   })
-  .then(res => res.text())
+  .then(res => {
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.text();
+  })
   .then(text => {
     statusEl.textContent = text;
   })
   .catch(err => {
-    statusEl.textContent = 'Could not reach local server. Is it running?';
+    console.error("Fetch Error:", err);
+    statusEl.textContent = `Error: ${err.name} - ${err.message}`;
   });
 }
 async function scheduleNotification() {
