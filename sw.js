@@ -9,6 +9,11 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Ignore local server requests (e.g. localhost API endpoints)
+  if (e.request.url.includes('localhost')) {
+    return;
+  }
+
   if (e.request.mode === 'navigate' || e.request.destination === 'document' || e.request.destination === 'script') {
     e.respondWith(
       fetch(e.request)
