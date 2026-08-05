@@ -2,9 +2,11 @@ package app.studycomfort.protogen;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.content.Context;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -12,7 +14,23 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // High Priority Notification Channel for Heads-Up Banners
+        // Auto-grant HTML5 webview permissions (Microphone/Audio/Camera) once Android system permission is granted
+        WebView webView = this.getBridge().getWebView();
+        if (webView != null) {
+            webView.setWebChromeClient(new WebChromeClient() {
+                @Override
+                public void onPermissionRequest(final PermissionRequest request) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            request.grant(request.getResources());
+                        }
+                    });
+                }
+            });
+        }
+
+        // Create High Priority Notification Channel for Heads-Up Banners
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             String channelId = "comfort_alerts";
             CharSequence name = "High Importance Study Reminders";

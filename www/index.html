@@ -400,18 +400,14 @@
 
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
-  <!-- Capacitor Native Plugins bridge script -->
-  <script src="cordova.js"></script>
-
   <script>
-    // Native Capacitor Local Notifications Plugin integration
-    let CapacitorLocalNotifications = null;
-
-    document.addEventListener('deviceready', () => {
-      if (window.Capacitor && window.Capacitor.Plugins) {
-        CapacitorLocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+    // Helper to obtain Capacitor LocalNotifications Plugin safely
+    function getLocalNotifPlugin() {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        return window.Capacitor.Plugins.LocalNotifications;
       }
-    });
+      return null;
+    }
 
     // Request All Native Android Permissions
     async function requestAllPermissions() {
@@ -419,25 +415,20 @@
       status.textContent = 'Requesting native Android permissions...';
 
       try {
-        // Native Capacitor Local Notifications Permission Request
-        if (CapacitorLocalNotifications) {
-          await CapacitorLocalNotifications.requestPermissions();
-        } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
-          await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+        const notifPlugin = getLocalNotifPlugin();
+        if (notifPlugin) {
+          await notifPlugin.requestPermissions();
         }
 
-        // Microphone permission via getUserMedia
+        // Prompt Mic permission
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
             console.warn('Mic error:', err);
             return null;
           });
-          if (stream) {
-            stream.getTracks().forEach(t => t.stop());
-          }
+          if (stream) stream.getTracks().forEach(t => t.stop());
         }
 
-        // Geolocation permission
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 3000 });
         }
@@ -484,13 +475,14 @@
         statusDiv.textContent = 'Sending notification now...';
       }
 
-      const notifPlugin = CapacitorLocalNotifications || (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications);
+      const notifPlugin = getLocalNotifPlugin();
 
       if (notifPlugin) {
         try {
           const perm = await notifPlugin.requestPermissions();
           if (perm.display !== 'granted') {
             alert('Notification permission not granted.');
+            statusDiv.textContent = 'Permission denied';
             return;
           }
 
@@ -504,26 +496,29 @@
                 body: '🧘 Time for a quick posture & eye comfort check!',
                 id: notifId,
                 schedule: { at: scheduleTime },
-                sound: null,
-                attachments: null,
-                actionTypeId: '',
-                extra: null,
                 channelId: 'comfort_alerts' // Uses high priority channel from MainActivity.java
               }
             ]
           });
+
+          if (delaySeconds === 0) {
+            statusDiv.textContent = 'Notification dispatched!';
+          }
+
         } catch (err) {
           alert('LocalNotification Error: ' + err.message);
+          statusDiv.textContent = 'Error sending notification';
         }
-      } else if ('Notification' in window) {
-        // PWA fallback
-        setTimeout(() => {
-          new Notification('Protogen Study Comfort', {
-            body: '🧘 Time for a quick posture & eye comfort check!'
-          });
-        }, delaySeconds * 1000);
       } else {
-        alert('Notifications not supported on this device view.');
+        // Fallback for non-Capacitor web context
+        setTimeout(() => {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Protogen Study Comfort', {
+              body: '🧘 Time for a quick posture & eye comfort check!'
+            });
+          }
+          statusDiv.textContent = 'Fallback notification dispatched';
+        }, delaySeconds * 1000);
       }
     }
 
@@ -598,7 +593,7 @@
           updateNoiseLevel();
 
         } catch (err) {
-          alert('Microphone permission error: ' + err.message + '\nMake sure to tap "Grant Native Android Permissions" above.');
+          alert('Microphone permission error: ' + err.message + '\nMake sure to grant microphone access in Android Settings > Apps > Study Comfort.');
         }
       } else {
         stopMicMonitor();
