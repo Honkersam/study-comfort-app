@@ -97,7 +97,6 @@
       gap: 8px;
     }
 
-    /* Controls Group */
     .control-row {
       display: flex;
       flex-direction: column;
@@ -413,7 +412,7 @@
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Push Notifications API with Heads-Up Popups, Haptics, & Selectable Delay
+    // Push Notifications API
     async function scheduleNotification() {
       if (!('Notification' in window)) {
         alert('This browser/device does not support notifications.');
@@ -430,11 +429,6 @@
         return;
       }
 
-      // Hardware haptic vibration test directly
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200, 100, 300]);
-      }
-
       const delaySeconds = parseInt(document.getElementById('notifDelay').value, 10);
       const statusDiv = document.getElementById('notifStatus');
 
@@ -447,11 +441,16 @@
       setTimeout(async () => {
         statusDiv.textContent = '';
 
+        // Trigger vibration exactly when the notification fires
+        if ('vibrate' in navigator) {
+          navigator.vibrate([300, 100, 300, 100, 300]);
+        }
+
         const options = {
           body: '🧘 Time for a quick posture & eye comfort check!',
           icon: 'icon-192.png',
           badge: 'badge-96.png',
-          vibrate: [300, 100, 300, 100, 300], // High urgency vibration pattern
+          vibrate: [300, 100, 300, 100, 300],
           renotify: true,
           tag: 'study-comfort-alert',
           requireInteraction: false
