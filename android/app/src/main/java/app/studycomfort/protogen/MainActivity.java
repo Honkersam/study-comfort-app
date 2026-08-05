@@ -6,9 +6,6 @@ import android.app.NotificationManager;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
-import android.webkit.WebView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
@@ -19,23 +16,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Explicitly forward and grant HTML5 WebView permission requests for AUDIO_CAPTURE & CAMERA
-        WebView webView = this.getBridge().getWebView();
-        if (webView != null) {
-            webView.setWebChromeClient(new WebChromeClient() {
-                @Override
-                public void onPermissionRequest(final PermissionRequest request) {
-                    MainActivity.this.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            // Automatically grant WebView audio/video permission resources
-                            request.grant(request.getResources());
-                        }
-                    });
-                }
-            });
-        }
 
         // High Importance Notification Channel for Heads-Up Banners
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
