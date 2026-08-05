@@ -1,4 +1,22 @@
-// Notifications Dispatch
+// Send Message to Arduino Local Server
+function sendMessage() {
+  const message = document.getElementById('msg').value;
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'Sending message...';
+
+  fetch('http://localhost:3000/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'message=' + encodeURIComponent(message)
+  })
+  .then(res => res.text())
+  .then(text => {
+    statusEl.textContent = text;
+  })
+  .catch(err => {
+    statusEl.textContent = 'Could not reach local server. Is it running?';
+  });
+}
 async function scheduleNotification() {
   const statusDiv = document.getElementById('notifStatus');
   statusDiv.textContent = 'Scheduling notification...';
