@@ -3,7 +3,7 @@ function controlLed(state) {
   const statusEl = document.getElementById('status');
   statusEl.textContent = `Turning LED ${state}...`;
 
-  fetch('http://localhost:3000/send', {
+  fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'message=' + encodeURIComponent(state)
@@ -19,7 +19,7 @@ function sendMessage() {
   const statusEl = document.getElementById('status');
   statusEl.textContent = 'Sending message...';
 
-  fetch('http://localhost:3000/send', {
+  fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'message=' + encodeURIComponent(message)
