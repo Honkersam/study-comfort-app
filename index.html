@@ -17,11 +17,35 @@
 <body>
 
   <div class="container">
-    <header>
-      <img src="icon-192.png" alt="Protogen Companion" class="avatar" />
-      <h1>Hello World 👋</h1>
-      <p class="subtitle">Protogen Study Comfort Companion</p>
+    <header class="app-header">
+      <img src="logo.png" alt="Study Comfort App Logo" />
+      <h1>The Study Comfort App</h1>
     </header>
+
+    <!-- Top Gauge Score Cards (matching design mock) -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Daily Score:</div>
+        <div class="gauge-container">
+          <svg class="gauge-svg" viewBox="0 0 120 70">
+            <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" />
+            <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="38" />
+          </svg>
+          <div class="gauge-value" id="dailyScoreVal">73</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Week Avg:</div>
+        <div class="gauge-container">
+          <svg class="gauge-svg" viewBox="0 0 120 70">
+            <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" />
+            <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" />
+          </svg>
+          <div class="gauge-value" id="weekAvgVal">48</div>
+        </div>
+      </div>
+    </div>
 
     <!-- Web Notifications Testing Card -->
     <div class="card">
