@@ -41,6 +41,31 @@ body {
   gap: 20px;
 }
 
+/* Responsive Desktop Layout */
+@media (min-width: 768px) {
+  .app-container, .container {
+    max-width: 1000px;
+    padding: 36px 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  header, .app-header {
+    grid-column: 1 / -1;
+    margin-bottom: 12px;
+  }
+
+  .stats-grid {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    max-width: 600px;
+    justify-self: center;
+    width: 100%;
+  }
+}
+
 /* Header */
 header, .app-header {
   display: flex;
