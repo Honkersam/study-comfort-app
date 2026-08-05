@@ -1,5 +1,13 @@
 {
   "appId": "app.studycomfort.protogen",
   "appName": "Study Comfort",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
 }
