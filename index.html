@@ -285,10 +285,10 @@
     <div class="card" style="border-color: var(--accent);">
       <div class="card-title">🔑 App Permissions Setup</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Grant Android permissions for Flashlight, Notifications, Microphone, and GPS Location.
+        Grant Android native permissions for Notifications, Microphone, and Location.
       </p>
       <button style="width: 100%; padding: 12px; background: var(--accent);" onclick="requestAllPermissions()">
-        Grant All Android Permissions
+        Grant Native Android Permissions
       </button>
       <div id="permStatus" style="font-size: 0.8rem; color: var(--success); margin-top: 8px; text-align: center;"></div>
     </div>
@@ -400,44 +400,56 @@
 
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
+  <!-- Capacitor Native Plugins bridge script -->
+  <script src="cordova.js"></script>
+
   <script>
+    // Native Capacitor Local Notifications Plugin integration
+    let CapacitorLocalNotifications = null;
+
+    document.addEventListener('deviceready', () => {
+      if (window.Capacitor && window.Capacitor.Plugins) {
+        CapacitorLocalNotifications = window.Capacitor.Plugins.LocalNotifications;
+      }
+    });
+
     // Request All Native Android Permissions
     async function requestAllPermissions() {
       const status = document.getElementById('permStatus');
-      status.textContent = 'Requesting Android permissions...';
+      status.textContent = 'Requesting native Android permissions...';
 
       try {
-        // Request Notification permission
-        if ('Notification' in window) {
-          await Notification.requestPermission();
+        // Native Capacitor Local Notifications Permission Request
+        if (CapacitorLocalNotifications) {
+          await CapacitorLocalNotifications.requestPermissions();
+        } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+          await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
         }
 
-        // Request Microphone permission
+        // Microphone permission via getUserMedia
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const mic = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-          if (mic) mic.getTracks().forEach(t => t.stop());
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
+            console.warn('Mic error:', err);
+            return null;
+          });
+          if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+          }
         }
 
-        // Request Camera / Flashlight permission
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).catch(() => null);
-          if (cam) cam.getTracks().forEach(t => t.stop());
-        }
-
-        // Request Geolocation permission
+        // Geolocation permission
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 3000 });
         }
 
-        status.textContent = 'All permission prompts requested successfully!';
+        status.textContent = 'Permission dialogs prompted!';
       } catch (err) {
-        status.textContent = 'Permissions error: ' + err.message;
+        status.textContent = 'Permission prompt error: ' + err.message;
       }
     }
 
-    // Native Cordova / Capacitor Flashlight plugin integration
+    // Native Flashlight toggle
     let torchOn = false;
-
     function toggleFlashlight() {
       const btn = document.getElementById('flashlightBtn');
       const status = document.getElementById('torchStatus');
@@ -454,66 +466,65 @@
               status.textContent = 'Off';
             }
           },
-          (err) => {
-            alert('Hardware Flashlight Error: ' + err);
-          }
+          (err) => alert('Flashlight error: ' + err)
         );
       } else {
-        // Web fallback if plugin unavailable
-        alert('Native Flashlight Plugin initializing... Please ensure camera/flashlight permission is granted.');
+        alert('Flashlight plugin ready.');
       }
     }
 
-    // Push Notifications API with High-Priority Channel for Heads-up Banner
+    // Native Push / Local Notifications
     async function scheduleNotification() {
-      if (!('Notification' in window)) {
-        alert('This browser/device does not support notifications.');
-        return;
-      }
-
-      let permission = Notification.permission;
-      if (permission !== 'granted') {
-        permission = await Notification.requestPermission();
-      }
-
-      if (permission !== 'granted') {
-        alert('Notification permission was denied.');
-        return;
-      }
-
       const delaySeconds = parseInt(document.getElementById('notifDelay').value, 10);
       const statusDiv = document.getElementById('notifStatus');
 
       if (delaySeconds > 0) {
-        statusDiv.textContent = `Notification scheduled! Exit/minimize the app now (${delaySeconds}s)...`;
+        statusDiv.textContent = `Scheduled! Exit/minimize the app now (${delaySeconds}s)...`;
       } else {
         statusDiv.textContent = 'Sending notification now...';
       }
 
-      setTimeout(async () => {
-        statusDiv.textContent = '';
+      const notifPlugin = CapacitorLocalNotifications || (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications);
 
-        if ('vibrate' in navigator) {
-          navigator.vibrate([300, 100, 300, 100, 300]);
+      if (notifPlugin) {
+        try {
+          const perm = await notifPlugin.requestPermissions();
+          if (perm.display !== 'granted') {
+            alert('Notification permission not granted.');
+            return;
+          }
+
+          const notifId = Math.floor(Math.random() * 100000);
+          const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
+
+          await notifPlugin.schedule({
+            notifications: [
+              {
+                title: 'Protogen Study Comfort',
+                body: '🧘 Time for a quick posture & eye comfort check!',
+                id: notifId,
+                schedule: { at: scheduleTime },
+                sound: null,
+                attachments: null,
+                actionTypeId: '',
+                extra: null,
+                channelId: 'comfort_alerts' // Uses high priority channel from MainActivity.java
+              }
+            ]
+          });
+        } catch (err) {
+          alert('LocalNotification Error: ' + err.message);
         }
-
-        const options = {
-          body: '🧘 Time for a quick posture & eye comfort check!',
-          icon: 'icon-192.png',
-          badge: 'badge-96.png',
-          vibrate: [300, 100, 300, 100, 300],
-          renotify: true,
-          tag: 'study-comfort-alert',
-          channelId: 'comfort_alerts' // High importance channel created in MainActivity.java
-        };
-
-        if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
-          const reg = await navigator.serviceWorker.ready;
-          reg.showNotification('Protogen Study Comfort', options);
-        } else {
-          new Notification('Protogen Study Comfort', options);
-        }
-      }, delaySeconds * 1000);
+      } else if ('Notification' in window) {
+        // PWA fallback
+        setTimeout(() => {
+          new Notification('Protogen Study Comfort', {
+            body: '🧘 Time for a quick posture & eye comfort check!'
+          });
+        }, delaySeconds * 1000);
+      } else {
+        alert('Notifications not supported on this device view.');
+      }
     }
 
     // Microphone Live Noise Level Monitor
@@ -587,7 +598,7 @@
           updateNoiseLevel();
 
         } catch (err) {
-          alert('Microphone permission denied or unavailable: ' + err.message);
+          alert('Microphone permission error: ' + err.message + '\nMake sure to tap "Grant Native Android Permissions" above.');
         }
       } else {
         stopMicMonitor();
@@ -765,7 +776,6 @@
       comfortChart.data.datasets[0].data[6] = score;
       comfortChart.update();
       
-      document.getElementById('permStatus');
       document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
         if (idx + 1 === score) {
           btn.classList.add('active');
