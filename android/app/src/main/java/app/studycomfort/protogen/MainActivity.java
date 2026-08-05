@@ -20,15 +20,16 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Auto-grant HTML5 webview permissions once Android OS permits them
+        // Explicitly forward and grant HTML5 WebView permission requests for AUDIO_CAPTURE & CAMERA
         WebView webView = this.getBridge().getWebView();
         if (webView != null) {
             webView.setWebChromeClient(new WebChromeClient() {
                 @Override
                 public void onPermissionRequest(final PermissionRequest request) {
-                    runOnUiThread(new Runnable() {
+                    MainActivity.this.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            // Automatically grant WebView audio/video permission resources
                             request.grant(request.getResources());
                         }
                     });
@@ -36,7 +37,7 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
-        // Create High Importance Notification Channel for Heads-Up Banners & Sound
+        // High Importance Notification Channel for Heads-Up Banners
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             String channelId = "comfort_alerts";
             CharSequence name = "High Importance Study Reminders";
@@ -54,7 +55,6 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
-        // Request all required runtime permissions directly at native Java activity startup
         requestNativePermissions();
     }
 
