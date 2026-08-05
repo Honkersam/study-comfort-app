@@ -202,22 +202,6 @@
       display: none;
     }
 
-    /* Screen Torch Overlay */
-    #screenTorchOverlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background-color: #ffffff;
-      z-index: 9999;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      color: #000;
-    }
-
     /* Timer Styles */
     .timer-display {
       font-size: 3.5rem;
@@ -290,13 +274,6 @@
 </head>
 <body>
 
-  <!-- Full Screen Flashlight Fallback Overlay -->
-  <div id="screenTorchOverlay" onclick="closeScreenTorch()">
-    <div style="font-size: 4rem; margin-bottom: 20px;">💡</div>
-    <div style="font-size: 1.2rem; font-weight: 700;">Screen Desk Light Active</div>
-    <div style="font-size: 0.9rem; color: #666; margin-top: 8px;">Tap anywhere to turn off</div>
-  </div>
-
   <div class="container">
     <header>
       <img src="icon-192.png" alt="Protogen Companion" class="avatar" />
@@ -304,11 +281,23 @@
       <p class="subtitle">Protogen Study Comfort Companion</p>
     </header>
 
+    <!-- Permissions Request Banner Card -->
+    <div class="card" style="border-color: var(--accent);">
+      <div class="card-title">🔑 App Permissions Setup</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Grant Android permissions for Flashlight, Notifications, Microphone, and GPS Location.
+      </p>
+      <button style="width: 100%; padding: 12px; background: var(--accent);" onclick="requestAllPermissions()">
+        Grant All Android Permissions
+      </button>
+      <div id="permStatus" style="font-size: 0.8rem; color: var(--success); margin-top: 8px; text-align: center;"></div>
+    </div>
+
     <!-- Notifications Testing Card -->
     <div class="card">
       <div class="card-title">🔔 System Notifications</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Test heads-up banner notifications with delay for testing outside the app.
+        Test native Android heads-up banner notifications with delay for testing outside the app.
       </p>
 
       <div class="control-row">
@@ -321,7 +310,7 @@
       </div>
 
       <button id="notifBtn" class="secondary" style="width: 100%; padding: 10px;" onclick="scheduleNotification()">
-        Schedule Push Notification
+        Schedule Native Push Notification
       </button>
       <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
     </div>
@@ -352,7 +341,7 @@
         <!-- Flashlight -->
         <div class="action-card" id="flashlightBtn" onclick="toggleFlashlight()">
           <span class="action-icon">🔦</span>
-          <span class="action-label">Desk Light</span>
+          <span class="action-label">Desk Flashlight</span>
           <span class="status-text" id="torchStatus">Off</span>
         </div>
 
@@ -412,7 +401,70 @@
   <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
 
   <script>
-    // Push Notifications API
+    // Request All Native Android Permissions
+    async function requestAllPermissions() {
+      const status = document.getElementById('permStatus');
+      status.textContent = 'Requesting Android permissions...';
+
+      try {
+        // Request Notification permission
+        if ('Notification' in window) {
+          await Notification.requestPermission();
+        }
+
+        // Request Microphone permission
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const mic = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+          if (mic) mic.getTracks().forEach(t => t.stop());
+        }
+
+        // Request Camera / Flashlight permission
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).catch(() => null);
+          if (cam) cam.getTracks().forEach(t => t.stop());
+        }
+
+        // Request Geolocation permission
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 3000 });
+        }
+
+        status.textContent = 'All permission prompts requested successfully!';
+      } catch (err) {
+        status.textContent = 'Permissions error: ' + err.message;
+      }
+    }
+
+    // Native Cordova / Capacitor Flashlight plugin integration
+    let torchOn = false;
+
+    function toggleFlashlight() {
+      const btn = document.getElementById('flashlightBtn');
+      const status = document.getElementById('torchStatus');
+
+      if (window.plugins && window.plugins.flashlight) {
+        window.plugins.flashlight.toggle(
+          () => {
+            torchOn = !torchOn;
+            if (torchOn) {
+              btn.classList.add('active');
+              status.textContent = 'Hardware LED On';
+            } else {
+              btn.classList.remove('active');
+              status.textContent = 'Off';
+            }
+          },
+          (err) => {
+            alert('Hardware Flashlight Error: ' + err);
+          }
+        );
+      } else {
+        // Web fallback if plugin unavailable
+        alert('Native Flashlight Plugin initializing... Please ensure camera/flashlight permission is granted.');
+      }
+    }
+
+    // Push Notifications API with High-Priority Channel for Heads-up Banner
     async function scheduleNotification() {
       if (!('Notification' in window)) {
         alert('This browser/device does not support notifications.');
@@ -441,7 +493,6 @@
       setTimeout(async () => {
         statusDiv.textContent = '';
 
-        // Trigger vibration exactly when the notification fires
         if ('vibrate' in navigator) {
           navigator.vibrate([300, 100, 300, 100, 300]);
         }
@@ -453,7 +504,7 @@
           vibrate: [300, 100, 300, 100, 300],
           renotify: true,
           tag: 'study-comfort-alert',
-          requireInteraction: false
+          channelId: 'comfort_alerts' // High importance channel created in MainActivity.java
         };
 
         if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
@@ -559,73 +610,6 @@
       document.getElementById('meterBar').style.width = '0%';
       document.getElementById('noiseLabel').textContent = 'Tap start to monitor noise';
       document.getElementById('noiseLabel').style.color = 'var(--text-muted)';
-    }
-
-    // Flashlight logic
-    let torchTrack = null;
-    let torchStream = null;
-    let torchOn = false;
-
-    async function toggleFlashlight() {
-      const btn = document.getElementById('flashlightBtn');
-      const status = document.getElementById('torchStatus');
-
-      if (torchOn) {
-        turnOffTorch();
-        return;
-      }
-
-      try {
-        torchStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: 'environment' } }
-        }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
-
-        const track = torchStream.getVideoTracks()[0];
-        if (track && track.getCapabilities && track.getCapabilities().torch) {
-          await track.applyConstraints({ advanced: [{ torch: true }] });
-          torchTrack = track;
-          torchOn = true;
-          btn.classList.add('active');
-          status.textContent = 'Hardware On';
-          return;
-        }
-      } catch (e) {}
-
-      if (torchStream) {
-        torchStream.getTracks().forEach(t => t.stop());
-        torchStream = null;
-      }
-
-      document.getElementById('screenTorchOverlay').style.display = 'flex';
-      torchOn = true;
-      btn.classList.add('active');
-      status.textContent = 'Screen Light On';
-    }
-
-    function closeScreenTorch() {
-      document.getElementById('screenTorchOverlay').style.display = 'none';
-      turnOffTorch();
-    }
-
-    function turnOffTorch() {
-      const btn = document.getElementById('flashlightBtn');
-      const status = document.getElementById('torchStatus');
-      
-      document.getElementById('screenTorchOverlay').style.display = 'none';
-
-      if (torchTrack) {
-        torchTrack.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
-        torchTrack.stop();
-        torchTrack = null;
-      }
-      if (torchStream) {
-        torchStream.getTracks().forEach(t => t.stop());
-        torchStream = null;
-      }
-
-      torchOn = false;
-      btn.classList.remove('active');
-      status.textContent = 'Off';
     }
 
     // Direct Local Rick Astley Audio Player
@@ -781,6 +765,7 @@
       comfortChart.data.datasets[0].data[6] = score;
       comfortChart.update();
       
+      document.getElementById('permStatus');
       document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
         if (idx + 1 === score) {
           btn.classList.add('active');
