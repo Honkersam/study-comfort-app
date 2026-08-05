@@ -1,3 +1,18 @@
+// Send LED Commands to Arduino Local Server
+function controlLed(state) {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = `Turning LED ${state}...`;
+
+  fetch('http://localhost:3000/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'message=' + encodeURIComponent(state)
+  })
+  .then(res => res.text())
+  .then(text => { statusEl.textContent = text; })
+  .catch(err => { statusEl.textContent = 'Could not reach local Node.js server.'; });
+}
+
 // Send Message to Arduino Local Server
 function sendMessage() {
   const message = document.getElementById('msg').value;

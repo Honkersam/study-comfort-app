@@ -36,15 +36,21 @@
       <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
     </div>
 
-    <!-- Arduino / Local Node.js Messenger Card -->
+    <!-- Arduino LED Control Card -->
     <div class="card">
-      <div class="card-title">📟 Send Message to Arduino</div>
+      <div class="card-title">💡 Arduino LED Controller</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Sends a POST request to local server at <code>http://localhost:3000/send</code>.
+        Control physical Arduino LED via Node.js serial bridge at <code>http://localhost:3000</code>.
       </p>
+      
+      <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <button onclick="controlLed('ON')" style="flex: 1; padding: 12px; background: var(--success); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600;">Turn ON (1)</button>
+        <button onclick="controlLed('OFF')" style="flex: 1; padding: 12px; background: var(--danger); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600;">Turn OFF (0)</button>
+      </div>
+
       <div style="display: flex; gap: 8px; flex-direction: column;">
-        <input type="text" id="msg" placeholder="Type message here" style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text);" />
-        <button onclick="sendMessage()" style="width: 100%; padding: 10px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600;">Send to Arduino</button>
+        <input type="text" id="msg" placeholder="Type custom message for Serial..." style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text);" />
+        <button onclick="sendMessage()" style="width: 100%; padding: 10px; background: var(--accent); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600;">Send Custom Message</button>
       </div>
       <p id="status" style="font-size: 0.85rem; color: var(--accent); margin-top: 10px; text-align: center;"></p>
     </div>
