@@ -110,7 +110,7 @@ async function scheduleNotification() {
   }
 }
 
-// Microphone Live Noise Level Monitor with Explicit Non-Enumerable Error Logging & Permission Query
+// Microphone Live Noise Level Monitor with Explicit Name/Message/Stack and Permission State Check
 let micStream = null;
 let micContext = null;
 let micAnalyser = null;
@@ -125,17 +125,17 @@ async function toggleMicMonitor() {
 
   if (!isMonitoringMic) {
     try {
-      // 1. Check microphone permission state explicitly via Permissions API
+      // Check permission state explicitly first
+      let permState = "unknown";
       if (navigator.permissions && navigator.permissions.query) {
         try {
-          const perm = await navigator.permissions.query({ name: 'microphone' });
-          alert(`Permissions API Microphone State: ${perm.state}`);
-        } catch (permErr) {
-          console.warn('Permissions query err:', permErr);
+          const permStatus = await navigator.permissions.query({ name: "microphone" });
+          permState = permStatus.state;
+        } catch (e) {
+          permState = "query_error: " + e.message;
         }
       }
 
-      // 2. Request audio stream
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = micContext.createMediaStreamSource(micStream);
@@ -193,11 +193,20 @@ async function toggleMicMonitor() {
 
     } catch (err) {
       console.error("Microphone error:", err);
+      let permStateText = "unknown";
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const p = await navigator.permissions.query({ name: "microphone" });
+          permStateText = p.state;
+        } catch (e) {}
+      }
+
       alert(
-        `Microphone Exception Details:\n` +
-        `Name: ${err.name}\n` +
-        `Message: ${err.message}\n` +
-        `String: ${err.toString()}`
+        `Microphone Error Details:\n` +
+        `Permission State: ${permStateText}\n` +
+        `Name: ${err.name || 'N/A'}\n` +
+        `Message: ${err.message || 'N/A'}\n` +
+        `ToString: ${err.toString()}`
       );
       return;
     }
