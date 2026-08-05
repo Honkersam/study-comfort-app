@@ -1,112 +1,30 @@
-// Helper to get Capacitor plugins
-function getCapPlugin(name) {
-  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) {
-    return window.Capacitor.Plugins[name];
-  }
-  return null;
-}
-
-// Request All Native Android Permissions
-async function requestAllPermissions() {
-  const status = document.getElementById('permStatus');
-  status.textContent = 'Requesting Native Android Permissions...';
-
-  try {
-    const notifPlugin = getCapPlugin('LocalNotifications');
-    if (notifPlugin) {
-      await notifPlugin.requestPermissions().catch(e => console.warn('Notif perm:', e));
-    }
-
-    const geoPlugin = getCapPlugin('Geolocation');
-    if (geoPlugin) {
-      await geoPlugin.requestPermissions().catch(e => console.warn('Geo perm:', e));
-    }
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
-        console.warn('Mic perm error:', err);
-        return null;
-      });
-      if (stream) stream.getTracks().forEach(t => t.stop());
-    }
-
-    status.textContent = 'Permissions prompted!';
-  } catch (err) {
-    status.textContent = 'Prompt error: ' + err.message;
-  }
-}
-
-// Flashlight toggle
-let torchOn = false;
-function toggleFlashlight() {
-  const btn = document.getElementById('flashlightBtn');
-  const status = document.getElementById('torchStatus');
-
-  if (window.plugins && window.plugins.flashlight) {
-    window.plugins.flashlight.toggle(
-      () => {
-        torchOn = !torchOn;
-        if (torchOn) {
-          btn.classList.add('active');
-          status.textContent = 'Hardware LED On';
-        } else {
-          btn.classList.remove('active');
-          status.textContent = 'Off';
-        }
-      },
-      (err) => alert('Flashlight error: ' + err)
-    );
-  } else {
-    alert('Flashlight plugin ready.');
-  }
-}
-
-// Fixed Push / Local Notification Dispatch
+// Notifications Dispatch
 async function scheduleNotification() {
   const statusDiv = document.getElementById('notifStatus');
   statusDiv.textContent = 'Scheduling notification...';
 
-  const notifPlugin = getCapPlugin('LocalNotifications');
-
-  if (notifPlugin) {
-    try {
-      const checkResult = await notifPlugin.checkPermissions();
-      let granted = checkResult.display === 'granted';
-
-      if (!granted) {
-        const reqResult = await notifPlugin.requestPermissions();
-        granted = reqResult.display === 'granted';
-      }
-
-      if (!granted) {
-        alert('Notification permission not granted.');
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      setTimeout(() => {
+        new Notification('Protogen Study Comfort', {
+          body: '🧘 Time for a quick posture & eye comfort check!',
+          icon: 'icon-192.png'
+        });
+        statusDiv.textContent = 'Notification sent!';
+      }, 3000);
+      statusDiv.textContent = 'Notification scheduled in 3s!';
+    } else if (Notification.permission !== 'denied') {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        scheduleNotification();
+      } else {
         statusDiv.textContent = 'Permission denied';
-        return;
       }
-
-      const notifId = Math.floor(Math.random() * 100000) + 1;
-      const scheduleTime = new Date(Date.now() + 5000);
-
-      await notifPlugin.schedule({
-        notifications: [
-          {
-            title: 'Protogen Study Comfort',
-            body: '🧘 Time for a quick posture & eye comfort check!',
-            id: notifId,
-            schedule: { at: scheduleTime },
-            channelId: 'comfort_alerts'
-          }
-        ]
-      });
-
-      statusDiv.textContent = 'Notification scheduled for 5s!';
-
-    } catch (err) {
-      alert('LocalNotification Error: ' + err.message);
-      statusDiv.textContent = 'Error sending notification';
+    } else {
+      statusDiv.textContent = 'Permission denied in browser settings';
     }
   } else {
-    alert('Capacitor LocalNotifications plugin not found.');
+    statusDiv.textContent = 'Browser does not support notifications';
   }
 }
 
@@ -266,17 +184,10 @@ async function getLocation() {
   const mapDiv = document.getElementById('map');
   display.textContent = 'Locating study environment...';
 
-  const geoPlugin = getCapPlugin('Geolocation');
-
   try {
     let lat, lon;
 
-    if (geoPlugin) {
-      await geoPlugin.requestPermissions();
-      const pos = await geoPlugin.getCurrentPosition({ enableHighAccuracy: true });
-      lat = pos.coords.latitude;
-      lon = pos.coords.longitude;
-    } else if (navigator.geolocation) {
+    if (navigator.geolocation) {
       const pos = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
       });

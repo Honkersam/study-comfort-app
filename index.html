@@ -23,27 +23,15 @@
       <p class="subtitle">Protogen Study Comfort Companion</p>
     </header>
 
-    <!-- Permissions Request Banner Card -->
-    <div class="card" style="border-color: var(--accent);">
-      <div class="card-title">🔑 Native App Permissions Setup</div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Triggers native Android prompts for Notifications, Microphone, Camera, and Geolocation.
-      </p>
-      <button style="width: 100%; padding: 12px; background: var(--accent);" onclick="requestAllPermissions()">
-        Grant All Native Permissions
-      </button>
-      <div id="permStatus" style="font-size: 0.8rem; color: var(--success); margin-top: 8px; text-align: center;"></div>
-    </div>
-
-    <!-- Notifications Testing Card -->
+    <!-- Web Notifications Testing Card -->
     <div class="card">
       <div class="card-title">🔔 System Notifications</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Schedules a native Android notification (5s future alarm for precise AlarmManager delivery).
+        Schedules a browser notification alert.
       </p>
 
       <button id="notifBtn" class="secondary" style="width: 100%; padding: 10px;" onclick="scheduleNotification()">
-        Send Native Push Notification
+        Send Notification
       </button>
       <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
     </div>
@@ -69,15 +57,8 @@
 
     <!-- Hardware Controls Card -->
     <div class="card">
-      <div class="card-title">⚡ Hardware & Quick Tools</div>
-      <div class="grid-2">
-        <!-- Flashlight -->
-        <div class="action-card" id="flashlightBtn" onclick="toggleFlashlight()">
-          <span class="action-icon">🔦</span>
-          <span class="action-label">Desk Flashlight</span>
-          <span class="status-text" id="torchStatus">Off</span>
-        </div>
-
+      <div class="card-title">⚡ Quick Tools</div>
+      <div class="grid-2" style="grid-template-columns: 1fr;">
         <!-- Never Gonna Give You Up -->
         <div class="action-card" id="rickrollBtn" onclick="toggleRickroll()">
           <span class="action-icon">🎵</span>
