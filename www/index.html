@@ -97,24 +97,6 @@
       gap: 8px;
     }
 
-    .control-row {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    select {
-      background: var(--bg);
-      color: var(--text);
-      border: 1px solid var(--border);
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      width: 100%;
-      outline: none;
-    }
-
     /* Hardware & Quick Actions */
     .grid-2 {
       display: grid;
@@ -297,20 +279,11 @@
     <div class="card">
       <div class="card-title">🔔 System Notifications</div>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-        Test native Android heads-up banner notifications with delay for testing outside the app.
+        Sends a native Android heads-up banner notification immediately.
       </p>
 
-      <div class="control-row">
-        <label style="font-size: 0.8rem; color: var(--text-muted);">Send Delay:</label>
-        <select id="notifDelay">
-          <option value="0">Send Immediately</option>
-          <option value="5">5 Seconds Delay (Close / Leave App now!)</option>
-          <option value="10">10 Seconds Delay</option>
-        </select>
-      </div>
-
       <button id="notifBtn" class="secondary" style="width: 100%; padding: 10px;" onclick="scheduleNotification()">
-        Schedule Native Push Notification
+        Send Native Push Notification
       </button>
       <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
     </div>
@@ -427,7 +400,7 @@
           await geoPlugin.requestPermissions().catch(e => console.warn('Geo perm:', e));
         }
 
-        // 3. Microphone HTML5 Audio Stream Prompt
+        // 3. Microphone Audio Stream
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(err => {
             console.warn('Mic perm error:', err);
@@ -467,16 +440,10 @@
       }
     }
 
-    // Native Push / Local Notifications
+    // Immediate Native Push / Local Notifications
     async function scheduleNotification() {
-      const delaySeconds = parseInt(document.getElementById('notifDelay').value, 10);
       const statusDiv = document.getElementById('notifStatus');
-
-      if (delaySeconds > 0) {
-        statusDiv.textContent = `Scheduled! Close / exit app now (${delaySeconds}s)...`;
-      } else {
-        statusDiv.textContent = 'Sending notification now...';
-      }
+      statusDiv.textContent = 'Sending notification now...';
 
       const notifPlugin = getCapPlugin('LocalNotifications');
 
@@ -490,7 +457,6 @@
           }
 
           const notifId = Math.floor(Math.random() * 100000) + 1;
-          const scheduleTime = new Date(Date.now() + delaySeconds * 1000);
 
           await notifPlugin.schedule({
             notifications: [
@@ -498,17 +464,17 @@
                 title: 'Protogen Study Comfort',
                 body: '🧘 Time for a quick posture & eye comfort check!',
                 id: notifId,
-                schedule: { at: scheduleTime },
+                schedule: { at: new Date(Date.now() + 500) }, // Immediate dispatch (500ms delay for Android scheduler sync)
                 channelId: 'comfort_alerts' // Uses HIGH importance channel created in MainActivity.java
               }
             ]
           });
 
-          statusDiv.textContent = 'Notification scheduled successfully!';
+          statusDiv.textContent = 'Notification sent!';
 
         } catch (err) {
           alert('LocalNotification Error: ' + err.message);
-          statusDiv.textContent = 'Error scheduling notification';
+          statusDiv.textContent = 'Error sending notification';
         }
       } else {
         alert('Capacitor LocalNotifications plugin not ready on window.');
@@ -530,7 +496,11 @@
 
       if (!isMonitoringMic) {
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          // Explicit simplified mic constraints for Android WebView
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true }
+          }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
+
           micContext = new (window.AudioContext || window.webkitAudioContext)();
           const source = micContext.createMediaStreamSource(micStream);
           micAnalyser = micContext.createAnalyser();
@@ -586,7 +556,7 @@
           updateNoiseLevel();
 
         } catch (err) {
-          alert('Microphone permission error: ' + err.message + '\nIf denied, enable Microphone in Android Settings > Apps > Study Comfort.');
+          alert('Microphone Error: ' + err.name + ' - ' + err.message + '\nMake sure microphone is granted under Android Settings > Apps > Study Comfort > Permissions.');
         }
       } else {
         stopMicMonitor();
