@@ -1,41 +1,27 @@
-// Send LED Commands to Arduino Local Server
-function controlLed(state) {
+// Send Score and NotifExists JSON to Local Server
+function sendPayload() {
+  const score = parseInt(document.getElementById('scoreInput').value, 10) || 0;
+  const notifExists = document.getElementById('notifExistsSelect').value === 'true';
   const statusEl = document.getElementById('status');
-  statusEl.textContent = `Turning LED ${state}...`;
+
+  statusEl.textContent = 'Sending request...';
+
+  const payload = {
+    score: score,
+    notifExists: notifExists
+  };
 
   fetch('https://localhost:3001/send', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'message=' + encodeURIComponent(state)
-  })
-  .then(res => {
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    return res.text();
-  })
-  .then(text => { statusEl.textContent = text; })
-  .catch(err => { 
-    console.error("Fetch Error:", err);
-    statusEl.textContent = `Error: ${err.name} - ${err.message}`; 
-  });
-}
-
-// Send Message to Arduino Local Server
-function sendMessage() {
-  const message = document.getElementById('msg').value;
-  const statusEl = document.getElementById('status');
-  statusEl.textContent = 'Sending message...';
-
-  fetch('https://localhost:3001/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'message=' + encodeURIComponent(message)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   })
   .then(res => {
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return res.text();
   })
   .then(text => {
-    statusEl.textContent = text;
+    statusEl.textContent = `Success: ${text}`;
   })
   .catch(err => {
     console.error("Fetch Error:", err);
