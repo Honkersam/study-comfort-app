@@ -1,0 +1,14 @@
+{
+  "name": "study-comfort-app",
+  "version": "1.0.0",
+  "description": "Protogen Study Comfort Companion PWA & Native Android App",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  }
+}
