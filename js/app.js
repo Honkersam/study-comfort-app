@@ -234,6 +234,57 @@ let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
+// Automatic Backend Payload Sender Logic
+let currentZoneColor = null;
+let zoneStartTime = null;
+let lastSentColor = null;
+
+function getColorZone(db) {
+  if (db < 50) return 'green';
+  if (db < 68) return 'yellow';
+  return 'red';
+}
+
+function getMostRecentDailyScore() {
+  if (todaySessions.length > 0) {
+    const total = todaySessions.reduce((sum, s) => sum + s.score, 0);
+    return Math.round(total / todaySessions.length);
+  }
+  return weekScores[6] || 50;
+}
+
+function sendAutomatedBackendPayload(currentDb, activeColor) {
+  const notifExists = (lastSentColor !== null && lastSentColor !== activeColor);
+  const recentScore = getMostRecentDailyScore();
+
+  const payload = {
+    score: recentScore,
+    decible: currentDb,
+    colour: activeColor,
+    notifExists: notifExists
+  };
+
+  console.log("Sending Automated Backend Payload:", payload);
+
+  fetch('https://localhost:3001/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.text();
+  })
+  .then(text => {
+    console.log("Backend POST Success:", text);
+    lastSentColor = activeColor;
+  })
+  .catch(err => {
+    console.warn("Backend POST Error (local server offline?):", err.message);
+    lastSentColor = activeColor;
+  });
+}
+
 async function toggleMicMonitor() {
   const micBtn = document.getElementById('micBtn');
   const dbVal = document.getElementById('dbVal');
@@ -255,6 +306,10 @@ async function toggleMicMonitor() {
       timelineSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
+
+      currentZoneColor = null;
+      zoneStartTime = null;
+      lastSentColor = null;
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -278,7 +333,6 @@ async function toggleMicMonitor() {
         }
         const rms = Math.sqrt(sum / dataArray.length);
 
-        // Direct, raw decibel reading
         let rawDb = Math.round(30 + (rms / 200) * 55);
         if (rawDb < 30) rawDb = 30;
         if (rawDb > 95) rawDb = 95;
@@ -288,7 +342,6 @@ async function toggleMicMonitor() {
           livePeak = rawDb;
         }
 
-        // Sample into time-series array directly
         frameCounter++;
         if (frameCounter % 15 === 0) {
           timelineSamples.push(rawDb);
@@ -302,6 +355,21 @@ async function toggleMicMonitor() {
         const currentAvg = Math.round(sessionSumDb / Math.max(1, frameCounter));
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
+
+        // Determine current noise color zone ('green', 'yellow', 'red')
+        const activeZone = getColorZone(rawDb);
+        const now = Date.now();
+
+        if (activeZone !== currentZoneColor) {
+          currentZoneColor = activeZone;
+          zoneStartTime = now;
+        } else {
+          // If level stays in the same color zone for 10 seconds (10,000 ms)
+          if (zoneStartTime && (now - zoneStartTime >= 10000)) {
+            sendAutomatedBackendPayload(rawDb, activeZone);
+            zoneStartTime = now; // Reset timer for next 10s interval
+          }
+        }
 
         if (rawDb < 50) {
           dbVal.style.color = 'var(--success)';
@@ -364,6 +432,9 @@ function stopMicMonitor() {
   if (micAnimId) cancelAnimationFrame(micAnimId);
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
+
+  currentZoneColor = null;
+  zoneStartTime = null;
 
   let sessionWaveform = resampleTimeline(timelineSamples, MAX_TIMELINE_POINTS);
 
@@ -484,7 +555,7 @@ function updateDailyScoreUI() {
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.6); border-radius: 10px;">
           <div>
             <div style="font-weight: 800; font-size: 0.95rem; color: var(--text);">Session #${idx + 1} (${s.time})</div>
-            <div style="font-size: 0.8 grand; color: var(--text-muted); font-weight: 600;">
+            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
               Avg: ${s.avgDb} dB | Peak: ${s.peakDb} dB | Rating: ${s.rating}/5
             </div>
           </div>
@@ -688,7 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderWaveformChart();
 });
 
-// Send Payload
+// Manual Settings POST Sender
 function sendPayload() {
   const score = parseInt(document.getElementById('scoreInput').value, 10) || 0;
   const notifExists = document.getElementById('notifExistsSelect').value === 'true';
