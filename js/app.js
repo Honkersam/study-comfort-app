@@ -1,24 +1,35 @@
 // Navigation Screen Handlers
 function openDailyScoreScreen() {
   document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('dailyScoreScreen').style.display = 'flex';
+  document.getElementById('dailyScoreScreen').style.display = 'grid';
+  document.getElementById('weekAvgScreen').style.display = 'none';
   window.location.hash = 'daily-score';
 }
 
-function closeDailyScoreScreen() {
+function openWeekAvgScreen() {
+  document.getElementById('mainScreen').style.display = 'none';
   document.getElementById('dailyScoreScreen').style.display = 'none';
-  document.getElementById('mainScreen').style.display = 'flex';
-  if (window.location.hash === '#daily-score') {
+  document.getElementById('weekAvgScreen').style.display = 'grid';
+  window.location.hash = 'week-avg';
+}
+
+function closeScreens() {
+  document.getElementById('dailyScoreScreen').style.display = 'none';
+  document.getElementById('weekAvgScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'grid';
+  if (window.location.hash) {
     history.pushState("", document.title, window.location.pathname + window.location.search);
   }
 }
 
 // Handle Browser Back Button
 window.addEventListener('popstate', () => {
-  if (window.location.hash !== '#daily-score') {
-    closeDailyScoreScreen();
-  } else {
+  if (window.location.hash === '#daily-score') {
     openDailyScoreScreen();
+  } else if (window.location.hash === '#week-avg') {
+    openWeekAvgScreen();
+  } else {
+    closeScreens();
   }
 });
 

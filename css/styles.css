@@ -34,7 +34,8 @@ body {
   padding: 0;
 }
 
-.app-container, .container {
+/* Navigation Pages */
+.screen-page {
   width: 100%;
   max-width: 440px;
   background-color: var(--bg);
@@ -46,7 +47,7 @@ body {
 
 /* Responsive Desktop Layout */
 @media (min-width: 768px) {
-  .app-container, .container {
+  .app-container, .container, .screen-page {
     max-width: 1000px;
     padding: 36px 40px;
     display: grid;

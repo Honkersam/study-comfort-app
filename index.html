@@ -35,7 +35,7 @@
         </div>
       </div>
 
-      <div class="stat-card">
+      <div class="stat-card" id="weekAvgWidget" onclick="openWeekAvgScreen()" style="cursor: pointer; transition: transform 0.15s ease;">
         <div class="stat-label">Week Avg:</div>
         <div class="gauge-container">
           <svg class="gauge-svg" viewBox="0 0 120 70">
@@ -166,9 +166,9 @@
   </div>
 
   <!-- Detailed Daily Score Screen -->
-  <div class="container" id="dailyScoreScreen" style="display: none; min-height: 100vh;">
-    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
-      <button onclick="closeDailyScoreScreen()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
+  <div class="screen-page" id="dailyScoreScreen" style="display: none; min-height: 100vh;">
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; grid-column: 1 / -1;">
+      <button onclick="closeScreens()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
         &#8592;
       </button>
       <h2 style="font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin: 0;">Daily Score</h2>
@@ -181,6 +181,26 @@
           <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="38" style="stroke-width: 10;" />
         </svg>
         <div class="gauge-value" style="font-size: 4.2rem; bottom: -5px;">73</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Weekly Average Screen -->
+  <div class="screen-page" id="weekAvgScreen" style="display: none; min-height: 100vh;">
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; grid-column: 1 / -1;">
+      <button onclick="closeScreens()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
+        &#8592;
+      </button>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin: 0;">Week Average</h2>
+    </div>
+
+    <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 20px; grid-column: 1 / -1;">
+      <div class="gauge-container" style="width: 240px; height: 140px;">
+        <svg class="gauge-svg" viewBox="0 0 120 70" style="width: 240px; height: 140px;">
+          <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" style="stroke-width: 10;" />
+          <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" style="stroke-width: 10;" />
+        </svg>
+        <div class="gauge-value" style="font-size: 4.2rem; bottom: -5px;">48</div>
       </div>
     </div>
   </div>
