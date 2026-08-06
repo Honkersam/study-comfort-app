@@ -16,18 +16,12 @@ function getPast7DaysNames() {
   return dayNames;
 }
 
-let weekScores = [56, 24, 32, 41, 87, 65, 42]; // Default fallbacks
-let isUserEditing = false;
-let isSaving = false;
+const DEFAULT_SCORES = [56, 24, 32, 41, 87, 65, 42];
+let weekScores = [...DEFAULT_SCORES];
 
 function getUserStorageKey(username) {
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
   return `study_comfort_scores_${slug}`;
-}
-
-function getCloudKey(username) {
-  const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
-  return `study_comfort_v2_${slug}`;
 }
 
 // User Switching
@@ -47,61 +41,98 @@ async function switchUser() {
   await loadGlobalScores();
 }
 
-// Cloud Persistence via JSONBin / MyJSON Storage API (Cross-device JSON Object Storage)
+// Memory Persistence (LocalStorage + Cloud Storage Sync)
 async function loadGlobalScores() {
   const localKey = getUserStorageKey(currentUser);
   
-  // 1. Load local cache first so UI renders immediately
+  // 1. Try local storage
   const cached = localStorage.getItem(localKey);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length === 7) {
         weekScores = parsed.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+        renderPastDaysList();
         updateWeekAverage();
+        return;
       }
     } catch(e) {}
   }
 
-  // 2. Load from global multi-device API endpoint
-  const cloudKey = getCloudKey(currentUser);
+  // 2. Try Cloud API fetch
+  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
   try {
-    const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cloudKey)}`);
+    const res = await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/`);
     if (res.ok) {
-      const json = await res.json();
-      if (json && json.data && Array.isArray(json.data.scores) && json.data.scores.length === 7) {
-        weekScores = json.data.scores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+      const data = await res.json();
+      if (data && data.count) {
+        const str = data.count.toString().padStart(14, '0');
+        const remoteScores = [];
+        for (let i = 0; i < 7; i++) {
+          remoteScores.push(parseInt(str.substring(i * 2, i * 2 + 2), 10) || 0);
+        }
+        weekScores = remoteScores;
         localStorage.setItem(localKey, JSON.stringify(weekScores));
         renderPastDaysList();
         updateWeekAverage();
+        return;
       }
     }
   } catch (err) {
     console.warn('Cloud load error:', err);
   }
+
+  // 3. Fallback to default scores if no saved record exists yet for this profile
+  weekScores = [...DEFAULT_SCORES];
+  renderPastDaysList();
+  updateWeekAverage();
 }
 
 async function saveGlobalScores() {
-  const localKey = getUserStorageKey(currentUser);
-  const cloudKey = getCloudKey(currentUser);
+  const statusMsg = document.getElementById('saveStatusMsg');
+  if (statusMsg) {
+    statusMsg.textContent = 'Saving...';
+    statusMsg.style.color = '#7f8c8d';
+  }
 
-  // Clean values to valid 0-100 integers
+  const localKey = getUserStorageKey(currentUser);
+  
+  // Validate and keep exact integers
   weekScores = weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+  
+  // Save locally first so it persists across refreshes on this device
   localStorage.setItem(localKey, JSON.stringify(weekScores));
 
-  // Save full intact array directly as JSON to cloud object storage
+  // Save to cloud using 14-digit integer encoding (2 digits per score)
+  const encodedCount = weekScores.map(s => s.toString().padStart(2, '0')).join('');
+  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
+
   try {
-    await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cloudKey)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: `Study Comfort User Data - ${currentUser}`,
-        data: { scores: weekScores }
-      })
-    });
+    const res = await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/set?count=${encodedCount}`);
+    if (res.ok) {
+      if (statusMsg) {
+        statusMsg.textContent = 'Saved successfully across devices! ✓';
+        statusMsg.style.color = 'var(--label-green)';
+      }
+    } else {
+      if (statusMsg) {
+        statusMsg.textContent = 'Saved locally ✓';
+        statusMsg.style.color = '#d9622b';
+      }
+    }
   } catch (err) {
     console.warn('Cloud save error:', err);
+    if (statusMsg) {
+      statusMsg.textContent = 'Saved locally ✓';
+      statusMsg.style.color = '#d9622b';
+    }
   }
+
+  updateWeekAverage();
+
+  setTimeout(() => {
+    if (statusMsg) statusMsg.textContent = '';
+  }, 3000);
 }
 
 function updateWeekAverage() {
@@ -144,9 +175,6 @@ function renderPastDaysList() {
     inputEl.className = 'day-score-input';
     inputEl.value = weekScores[idx];
 
-    inputEl.addEventListener('focus', () => { isUserEditing = true; });
-    inputEl.addEventListener('blur', () => { isUserEditing = false; });
-
     inputEl.addEventListener('input', (e) => {
       let val = parseInt(e.target.value, 10);
       if (isNaN(val)) val = 0;
@@ -154,7 +182,6 @@ function renderPastDaysList() {
       if (val > 100) val = 100;
       weekScores[idx] = val;
       updateWeekAverage();
-      saveGlobalScores();
     });
 
     row.appendChild(nameEl);
