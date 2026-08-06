@@ -252,21 +252,17 @@ function sendPayload() {
   });
 }
 
-// Notification feature
+// Instant Break Notification trigger
 async function scheduleNotification() {
   const statusDiv = document.getElementById('notifStatus');
-  statusDiv.textContent = 'Scheduling notification...';
 
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      setTimeout(() => {
-        new Notification('Protogen Study Comfort', {
-          body: '🧘 Time for a quick posture & eye comfort check!',
-          icon: 'icon-192.png'
-        });
-        statusDiv.textContent = 'Notification sent!';
-      }, 3000);
-      statusDiv.textContent = 'Notification scheduled in 3s!';
+      new Notification('Protogen Study Comfort', {
+        body: '🧘 Time for a quick posture & eye comfort check!',
+        icon: 'icon-192.png'
+      });
+      statusDiv.textContent = 'Notification sent instantly!';
     } else if (Notification.permission !== 'denied') {
       const perm = await Notification.requestPermission();
       if (perm === 'granted') {
