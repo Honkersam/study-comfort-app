@@ -1,10 +1,10 @@
-// Application State
-let dailyScore = 73;
+// Application State per User
+let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
+
+// Active User's Session Store
+let todaySessions = []; // Array of session objects: { score, avgDb, peakDb, rating, time }
 let sessionAvgDb = 0;
 let sessionPeakDb = 0;
-let lastRating = 0;
-
-let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Default Past 7 Days relative to current day
 function getPast7DaysNames() {
@@ -25,7 +25,7 @@ let weekScores = [...DEFAULT_SCORES];
 
 function getUserStorageKey(username) {
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
-  return `study_comfort_scores_${slug}`;
+  return `study_comfort_v3_${slug}`;
 }
 
 // User Switching
@@ -52,28 +52,41 @@ function loadUserScores() {
   
   if (cached) {
     try {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length === 7) {
-        weekScores = parsed.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+      const data = JSON.parse(cached);
+      if (data) {
+        if (Array.isArray(data.weekScores) && data.weekScores.length === 7) {
+          weekScores = data.weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+        }
+        todaySessions = Array.isArray(data.todaySessions) ? data.todaySessions : [];
+        
         renderPastDaysList();
         updateWeekAverage();
+        updateDailyScoreUI();
         updateChart();
         return;
       }
     } catch(e) {}
   }
 
-  // Fallback to default scores if user has no saved record yet
+  // Fallback to default state if user has no saved record yet
   weekScores = [...DEFAULT_SCORES];
+  todaySessions = [];
   renderPastDaysList();
   updateWeekAverage();
+  updateDailyScoreUI();
   updateChart();
 }
 
 function saveUserScores() {
   const localKey = getUserStorageKey(currentUser);
   weekScores = weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
-  localStorage.setItem(localKey, JSON.stringify(weekScores));
+  
+  const payload = {
+    weekScores: weekScores,
+    todaySessions: todaySessions
+  };
+
+  localStorage.setItem(localKey, JSON.stringify(payload));
   updateWeekAverage();
   updateChart();
 }
@@ -255,7 +268,6 @@ async function toggleMicMonitor() {
       if (postSessionCard) postSessionCard.style.display = 'none';
 
       const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
-      let sampleFrameCount = 0;
 
       function updateNoiseLevel() {
         if (!isMonitoringMic) return;
@@ -271,15 +283,13 @@ async function toggleMicMonitor() {
         let estimatedDb = Math.round(30 + (rms / 255) * 60);
         if (estimatedDb < 30) estimatedDb = 30;
 
-        sampleFrameCount++;
         sessionTotalSamples++;
         sessionSumDb += estimatedDb;
 
         if (estimatedDb > livePeak) {
-          livePeak = estimatedDb; // Track highest peak
+          livePeak = estimatedDb;
         }
 
-        // Memory-Efficient Binned Downsampling (Fixed size array regardless of session hours)
         let binIdx = Math.floor((sessionTotalSamples - 1) / Math.max(1, Math.floor(sessionTotalSamples / MAX_WAVEFORM_BINS)));
         if (binIdx >= MAX_WAVEFORM_BINS) binIdx = MAX_WAVEFORM_BINS - 1;
         waveformBins[binIdx] = Math.max(waveformBins[binIdx], estimatedDb);
@@ -289,7 +299,6 @@ async function toggleMicMonitor() {
         let percent = Math.min(100, Math.max(0, ((estimatedDb - 30) / 60) * 100));
         meterBar.style.width = `${percent}%`;
 
-        // Update real-time session stats
         const currentAvg = Math.round(sessionSumDb / sessionTotalSamples);
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
@@ -354,61 +363,170 @@ function stopMicMonitor() {
   document.getElementById('noiseLabel').textContent = `Peak Noise: ${sessionPeakDb} dB`;
   document.getElementById('noiseLabel').style.color = 'var(--text-muted)';
 
-  // Prompt user for session rating
   const postSessionCard = document.getElementById('postSessionCard');
   if (postSessionCard) postSessionCard.style.display = 'block';
 }
 
 function submitSessionRating(rating) {
-  lastRating = rating;
-  calculateDailyScore(sessionAvgDb, sessionPeakDb, rating);
-  
+  // Calculate score for THIS specific session
+  const ratingScore = rating * 20;
+
+  let noiseScore = 100 - ((sessionAvgDb - 30) / 60) * 100;
+  noiseScore = Math.min(100, Math.max(0, noiseScore));
+
+  let peakScore = 100 - ((sessionPeakDb - 30) / 60) * 100;
+  peakScore = Math.min(100, Math.max(0, peakScore));
+
+  const sessionScore = Math.round((ratingScore * 0.50) + (noiseScore * 0.35) + (peakScore * 0.15));
+
+  const newSession = {
+    score: sessionScore,
+    avgDb: sessionAvgDb,
+    peakDb: sessionPeakDb,
+    rating: rating,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+
+  // Add session to user's daily session log
+  todaySessions.push(newSession);
+  saveUserScores();
+
   const postSessionCard = document.getElementById('postSessionCard');
   if (postSessionCard) postSessionCard.style.display = 'none';
 
+  updateDailyScoreUI();
+  renderWaveformChart();
   openDailyScoreScreen();
 }
 
-function calculateDailyScore(avgDb, peakDb, rating) {
-  const ratingScore = rating * 20;
-
-  let noiseScore = 100 - ((avgDb - 30) / 60) * 100;
-  noiseScore = Math.min(100, Math.max(0, noiseScore));
-
-  let peakScore = 100 - ((peakDb - 30) / 60) * 100;
-  peakScore = Math.min(100, Math.max(0, peakScore));
-
-  const finalScore = Math.round((ratingScore * 0.50) + (noiseScore * 0.35) + (peakScore * 0.15));
-  dailyScore = Math.min(100, Math.max(0, finalScore));
-
-  weekScores[6] = dailyScore;
-  saveUserScores();
-
-  updateDailyScoreUI(avgDb, peakDb, rating);
-  renderWaveformChart();
-}
-
-function updateDailyScoreUI(avgDb, peakDb, rating) {
+// Update Daily Score UI based on average of all sessions completed today
+function updateDailyScoreUI() {
   const homeVal = document.getElementById('homeDailyVal');
   const detailVal = document.getElementById('detailDailyScoreVal');
   const homeArc = document.getElementById('homeDailyGaugeArc');
+  const sessionsCountEl = document.getElementById('detailSessionsCount');
+  const comfortBadge = document.getElementById('detailComfortBadge');
 
-  if (homeVal) homeVal.textContent = dailyScore;
-  if (detailVal) detailVal.textContent = dailyScore;
+  if (todaySessions.length === 0) {
+    if (homeVal) homeVal.textContent = '--';
+    if (detailVal) detailVal.textContent = '--';
+    if (homeArc) homeArc.setAttribute('stroke-dashoffset', 126);
+    if (sessionsCountEl) sessionsCountEl.textContent = '0 Sessions Today';
+    if (comfortBadge) {
+      comfortBadge.textContent = 'No Sessions Completed Yet';
+      comfortBadge.style.background = 'rgba(0,0,0,0.08)';
+      comfortBadge.style.color = 'var(--text-muted)';
+    }
+  } else {
+    // Average score across all today's sessions
+    const totalScore = todaySessions.reduce((sum, s) => sum + s.score, 0);
+    const avgScore = Math.round(totalScore / todaySessions.length);
 
-  if (homeArc) {
-    const offset = 141.37 * (1 - (dailyScore / 100));
-    homeArc.setAttribute('stroke-dashoffset', offset);
+    if (homeVal) homeVal.textContent = avgScore;
+    if (detailVal) detailVal.textContent = avgScore;
+
+    if (homeArc) {
+      const offset = 141.37 * (1 - (avgScore / 100));
+      homeArc.setAttribute('stroke-dashoffset', offset);
+    }
+
+    if (sessionsCountEl) {
+      sessionsCountEl.textContent = `${todaySessions.length} Session${todaySessions.length > 1 ? 's' : ''} Logged Today`;
+    }
+
+    if (comfortBadge) {
+      if (avgScore >= 70) {
+        comfortBadge.textContent = 'Optimal Comfort';
+        comfortBadge.style.background = 'rgba(72, 119, 66, 0.15)';
+        comfortBadge.style.color = 'var(--label-green)';
+      } else if (avgScore >= 50) {
+        comfortBadge.textContent = 'Moderate Comfort';
+        comfortBadge.style.background = 'rgba(243, 156, 18, 0.15)';
+        comfortBadge.style.color = 'var(--warning)';
+      } else {
+        comfortBadge.textContent = 'High Noise / Low Comfort';
+        comfortBadge.style.background = 'rgba(231, 76, 60, 0.15)';
+        comfortBadge.style.color = 'var(--danger)';
+      }
+    }
   }
 
-  // Update Summary Panel in Daily Score Detail
-  const summaryAvg = document.getElementById('summaryAvgDb');
-  const summaryPeak = document.getElementById('summaryPeakDb');
-  const summaryRating = document.getElementById('summaryRating');
+  // Populate Today's Sessions List inside Daily Score screen
+  const sessionsList = document.getElementById('todaySessionsList');
+  if (sessionsList) {
+    if (todaySessions.length === 0) {
+      sessionsList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 10px;">No sessions completed today yet. Start a session from the main screen!</div>`;
+    } else {
+      sessionsList.innerHTML = todaySessions.map((s, idx) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.6); border-radius: 10px;">
+          <div>
+            <div style="font-weight: 800; font-size: 0.95rem; color: var(--text);">Session #${idx + 1} (${s.time})</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+              Avg: ${s.avgDb} dB | Peak: ${s.peakDb} dB | Rating: ${s.rating}/5
+            </div>
+          </div>
+          <div style="font-family: 'Fredoka One', cursive; font-size: 1.4rem; color: #d9622b;">
+            ${s.score}
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+}
 
-  if (summaryAvg) summaryAvg.textContent = `${avgDb || sessionAvgDb || '--'} dB`;
-  if (summaryPeak) summaryPeak.textContent = `${peakDb || sessionPeakDb || '--'} dB`;
-  if (summaryRating) summaryRating.textContent = `${rating || lastRating || '--'} / 5`;
+// Trigger New Day for ALL USERS across storage
+function triggerNewDayForAllUsers() {
+  const statusEl = document.getElementById('newDayStatus');
+  if (statusEl) statusEl.textContent = 'Advancing day for all users...';
+
+  // Find all user keys in localStorage
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('study_comfort_v3_'));
+  
+  if (keys.length === 0) {
+    // Save current user key if first time
+    const currentKey = getUserStorageKey(currentUser);
+    keys.push(currentKey);
+  }
+
+  keys.forEach(key => {
+    try {
+      const raw = localStorage.getItem(key);
+      let userData = raw ? JSON.parse(raw) : { weekScores: [...DEFAULT_SCORES], todaySessions: [] };
+      
+      let finalDailyScore = 0;
+      if (userData.todaySessions && userData.todaySessions.length > 0) {
+        const sum = userData.todaySessions.reduce((a, b) => a + b.score, 0);
+        finalDailyScore = Math.round(sum / userData.todaySessions.length);
+      } else {
+        // If no sessions were run, fall back to current 7-day average or baseline
+        finalDailyScore = 50;
+      }
+
+      // Shift 7-day array: drop oldest day [0], append new day score at end [6]
+      if (Array.isArray(userData.weekScores) && userData.weekScores.length === 7) {
+        userData.weekScores.shift();
+        userData.weekScores.push(finalDailyScore);
+      } else {
+        userData.weekScores = [24, 32, 41, 87, 65, 42, finalDailyScore];
+      }
+
+      // Reset today's sessions to empty for the new day
+      userData.todaySessions = [];
+
+      localStorage.setItem(key, JSON.stringify(userData));
+    } catch(err) {
+      console.warn('Error processing key:', key, err);
+    }
+  });
+
+  // Reload current user state
+  loadUserScores();
+
+  if (statusEl) {
+    statusEl.textContent = 'New Day triggered for all users! Daily scores reset ✓';
+    statusEl.style.color = 'var(--label-green)';
+    setTimeout(() => { statusEl.textContent = ''; }, 3500);
+  }
 }
 
 // Half-Waveform Noise Level Bar Graph
@@ -421,11 +539,10 @@ function renderWaveformChart() {
   const ctx = chartEl.getContext('2d');
   const data = waveformBins.length ? waveformBins : new Array(MAX_WAVEFORM_BINS).fill(30);
 
-  // Background colors per bar based on noise level
   const barColors = data.map(db => {
-    if (db < 50) return '#487742'; // Green
-    if (db < 70) return '#f39c12'; // Yellow
-    return '#e74c3c'; // Red
+    if (db < 50) return '#487742';
+    if (db < 70) return '#f39c12';
+    return '#e74c3c';
   });
 
   if (waveformChart) {
@@ -544,7 +661,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderPastDaysList();
   loadUserScores();
   initChart();
-  updateDailyScoreUI(42, 58, 4);
   renderWaveformChart();
 });
 
