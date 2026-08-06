@@ -2,7 +2,7 @@
 let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Active User's Session Store
-let todaySessions = []; // Array of session objects
+let todaySessions = []; 
 let sessionAvgDb = 0;
 let sessionPeakDb = 0;
 
@@ -68,7 +68,6 @@ function loadUserScores() {
     } catch(e) {}
   }
 
-  // Fallback to default state if user has no saved record yet
   weekScores = [...DEFAULT_SCORES];
   todaySessions = [];
   renderPastDaysList();
@@ -229,13 +228,12 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Chronological Downsampling Bins (Fixed 40-bin Array)
-const MAX_WAVEFORM_BINS = 40;
-let binSums = new Array(MAX_WAVEFORM_BINS).fill(0);
-let binCounts = new Array(MAX_WAVEFORM_BINS).fill(0);
-let sessionTotalSamples = 0;
+// Dynamic Timeline Buffer (Stores chronological readings over session time)
+const MAX_TIMELINE_POINTS = 60; // Max 60 bars on graph
+let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
+let sampleIntervalCounter = 0;
 
 async function toggleMicMonitor() {
   const micBtn = document.getElementById('micBtn');
@@ -255,11 +253,10 @@ async function toggleMicMonitor() {
       source.connect(micAnalyser);
 
       isMonitoringMic = true;
-      binSums = new Array(MAX_WAVEFORM_BINS).fill(0);
-      binCounts = new Array(MAX_WAVEFORM_BINS).fill(0);
-      sessionTotalSamples = 0;
+      timelineSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
+      sampleIntervalCounter = 0;
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -276,40 +273,34 @@ async function toggleMicMonitor() {
 
         micAnalyser.getByteFrequencyData(dataArray);
 
+        // Responsive RMS decibel calculation
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i] * dataArray[i];
         }
         const rms = Math.sqrt(sum / dataArray.length);
 
-        let estimatedDb = Math.round(30 + (rms / 255) * 60);
+        // Map audio signal dynamically from 30 dB to 90 dB
+        let estimatedDb = Math.round(30 + (rms / 128) * 60);
         if (estimatedDb < 30) estimatedDb = 30;
 
-        sessionTotalSamples++;
         sessionSumDb += estimatedDb;
-
         if (estimatedDb > livePeak) {
           livePeak = estimatedDb;
         }
 
-        // Chronological Time Mapping: Maps the current sample into its chronological time slot (0 to 39)
-        // As time progresses, samples fill from Left (Start of session) to Right (Current time)
-        let binIdx = Math.min(MAX_WAVEFORM_BINS - 1, Math.floor(((sessionTotalSamples - 1) % (MAX_WAVEFORM_BINS * 10)) / 10));
-        
-        // If session goes long, dynamically assign based on timeline progress ratio
-        if (sessionTotalSamples > MAX_WAVEFORM_BINS) {
-          binIdx = Math.min(MAX_WAVEFORM_BINS - 1, Math.floor(((sessionTotalSamples - 1) / sessionTotalSamples) * MAX_WAVEFORM_BINS));
+        // Sample into time-series array roughly 3 times per second (every ~20 animation frames)
+        sampleIntervalCounter++;
+        if (sampleIntervalCounter % 20 === 0) {
+          timelineSamples.push(estimatedDb);
         }
-
-        binSums[binIdx] += estimatedDb;
-        binCounts[binIdx]++;
 
         dbVal.textContent = `${estimatedDb} dB`;
         
         let percent = Math.min(100, Math.max(0, ((estimatedDb - 30) / 60) * 100));
         meterBar.style.width = `${percent}%`;
 
-        const currentAvg = Math.round(sessionSumDb / sessionTotalSamples);
+        const currentAvg = Math.round(sessionSumDb / Math.max(1, sampleIntervalCounter));
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
 
@@ -345,28 +336,45 @@ async function toggleMicMonitor() {
   }
 }
 
+// Downsample long time series to exactly MAX_TIMELINE_POINTS without losing chronological time sequence
+function resampleTimeline(rawSamples, targetSize) {
+  if (!rawSamples || rawSamples.length === 0) {
+    return [38, 52, 44, 38, 72, 54, 60, 42, 65, 48, 42, 62, 45, 51, 38, 53, 46, 68, 40, 44, 70, 50, 42, 56, 52, 45, 62, 46, 48, 51, 42, 58, 38, 50, 44, 65, 46, 48, 42, 40];
+  }
+  if (rawSamples.length <= targetSize) {
+    return rawSamples;
+  }
+
+  const result = [];
+  const chunkSize = rawSamples.length / targetSize;
+
+  for (let i = 0; i < targetSize; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const chunk = rawSamples.slice(start, end);
+    if (chunk.length > 0) {
+      // Pick max reading in time chunk to retain spikes
+      result.push(Math.max(...chunk));
+    }
+  }
+  return result;
+}
+
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
 
-  let sessionWaveform = [];
+  let sessionWaveform = resampleTimeline(timelineSamples, MAX_TIMELINE_POINTS);
 
-  if (sessionTotalSamples > 0) {
-    sessionAvgDb = Math.round(sessionSumDb / sessionTotalSamples);
+  if (timelineSamples.length > 0) {
+    const total = timelineSamples.reduce((a, b) => a + b, 0);
+    sessionAvgDb = Math.round(total / timelineSamples.length);
     sessionPeakDb = livePeak;
-
-    // Calculate chronological averages per time bin
-    sessionWaveform = binSums.map((sum, i) => {
-      const count = binCounts[i];
-      return count > 0 ? Math.round(sum / count) : 30;
-    });
   } else {
-    sessionAvgDb = 42;
-    sessionPeakDb = 58;
-    // Fallback chronological timeline sequence (Not sorted)
-    sessionWaveform = [35, 48, 42, 35, 62, 48, 55, 38, 58, 44, 40, 58, 42, 46, 32, 49, 43, 59, 36, 40, 62, 45, 38, 50, 47, 42, 58, 41, 44, 46, 39, 53, 31, 45, 40, 58, 41, 43, 40, 37];
+    sessionAvgDb = 45;
+    sessionPeakDb = 72;
   }
 
   const micBtn = document.getElementById('micBtn');
@@ -403,7 +411,7 @@ function submitSessionRating(rating) {
     avgDb: sessionAvgDb,
     peakDb: sessionPeakDb,
     rating: rating,
-    waveform: window.lastSessionWaveform || new Array(MAX_WAVEFORM_BINS).fill(30),
+    waveform: window.lastSessionWaveform || new Array(40).fill(35),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
 
@@ -547,13 +555,12 @@ function renderWaveformChart(customWaveform) {
 
   const ctx = chartEl.getContext('2d');
   
-  // Use passed session waveform or fall back to last session
   let data = customWaveform;
   if (!data && todaySessions.length > 0) {
     data = todaySessions[todaySessions.length - 1].waveform;
   }
   if (!data || !data.length) {
-    data = [35, 48, 42, 35, 62, 48, 55, 38, 58, 44, 40, 58, 42, 46, 32, 49, 43, 59, 36, 40, 62, 45, 38, 50, 47, 42, 58, 41, 44, 46, 39, 53, 31, 45, 40, 58, 41, 43, 40, 37];
+    data = [38, 52, 44, 38, 72, 54, 60, 42, 65, 48, 42, 62, 45, 51, 38, 53, 46, 68, 40, 44, 70, 50, 42, 56, 52, 45, 62, 46, 48, 51, 42, 58, 38, 50, 44, 65, 46, 48, 42, 40];
   }
 
   const barColors = data.map(db => {
@@ -563,6 +570,7 @@ function renderWaveformChart(customWaveform) {
   });
 
   if (waveformChart) {
+    waveformChart.data.labels = new Array(data.length).fill('');
     waveformChart.data.datasets[0].data = data;
     waveformChart.data.datasets[0].backgroundColor = barColors;
     waveformChart.update();
