@@ -129,7 +129,8 @@ function renderPastDaysList() {
   listContainer.innerHTML = '';
 
   dayNames.forEach((name, idx) => {
-    const row = document.className = 'day-row';
+    const row = document.createElement('div');
+    row.className = 'day-row';
 
     const nameEl = document.createElement('div');
     nameEl.className = 'day-name';
@@ -236,14 +237,14 @@ let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Automatic Backend Payload Sender Logic
-let fiveSecWindowSamples = [];
+// Automatic Backend Payload Sender Logic (Every 1 Second)
+let oneSecWindowSamples = [];
 let payloadIntervalId = null;
 
 // Break Timer Notification Logic
 let breakTimerId = null;
-let activeNotifCount = 0; // Tracks remaining payloads with notifExists: true
-let lastPayloadState = { score: 50, decible: 40, colour: 'green' };
+let activeNotifCount = 0; // Tracks remaining 1-second payloads with notifExists: true
+let lastSentPayload = { score: 50, decible: 40, colour: 'green' };
 
 function getColorZone(db) {
   if (db < 50) return 'green';
@@ -259,7 +260,7 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
-// Trigger desktop break notification + IMMEDIATE POST payload with notifExists: true
+// Trigger break notification + IMMEDIATE payload with exact last sent payload values and notifExists: true
 function triggerBreakCheckin() {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification('Protogen Study Comfort', {
@@ -268,13 +269,13 @@ function triggerBreakCheckin() {
     });
   }
 
-  activeNotifCount = 3; // Keep true for next 3 regular payloads
+  // Keep notifExists: true for 15 subsequent 1-second payload cycles (~15 seconds)
+  activeNotifCount = 15;
 
-  // Send IMMEDIATE payload with exact most recent values and notifExists: true
   const immediatePayload = {
-    score: lastPayloadState.score,
-    decible: lastPayloadState.decible,
-    colour: lastPayloadState.colour,
+    score: lastSentPayload.score,
+    decible: lastSentPayload.decible,
+    colour: lastSentPayload.colour,
     notifExists: true
   };
 
@@ -293,20 +294,19 @@ function triggerBreakCheckin() {
   .catch(err => console.warn("Immediate Break Payload Error:", err.message));
 }
 
-function sendAutomated5SecPayload() {
+function sendAutomated1SecPayload() {
   if (!isMonitoringMic) return;
 
-  let avg5SecDb = lastPayloadState.decible;
-  if (fiveSecWindowSamples.length > 0) {
-    const sum = fiveSecWindowSamples.reduce((a, b) => a + b, 0);
-    avg5SecDb = Math.round(sum / fiveSecWindowSamples.length);
-    fiveSecWindowSamples = [];
+  let avg1SecDb = lastSentPayload.decible;
+  if (oneSecWindowSamples.length > 0) {
+    const sum = oneSecWindowSamples.reduce((a, b) => a + b, 0);
+    avg1SecDb = Math.round(sum / oneSecWindowSamples.length);
+    oneSecWindowSamples = [];
   }
 
-  const activeColor = getColorZone(avg5SecDb);
+  const activeColor = getColorZone(avg1SecDb);
   const recentScore = getMostRecentDailyScore();
 
-  // notifExists is true if activeNotifCount > 0, then decrements
   const notifExists = (activeNotifCount > 0);
   if (activeNotifCount > 0) {
     activeNotifCount--;
@@ -314,15 +314,14 @@ function sendAutomated5SecPayload() {
 
   const payload = {
     score: recentScore,
-    decible: avg5SecDb,
+    decible: avg1SecDb,
     colour: activeColor,
     notifExists: notifExists
   };
 
-  // Cache state for immediate break payload reuse
-  lastPayloadState = { score: recentScore, decible: avg5SecDb, colour: activeColor };
+  lastSentPayload = { score: recentScore, decible: avg1SecDb, colour: activeColor };
 
-  console.log("Sending 5-Sec Window Payload:", payload);
+  console.log("Sending 1-Sec Window Payload:", payload);
 
   fetch('https://localhost:3001/send', {
     method: 'POST',
@@ -356,13 +355,13 @@ async function toggleMicMonitor() {
 
       isMonitoringMic = true;
       timelineSamples = [];
-      fiveSecWindowSamples = [];
+      oneSecWindowSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
       activeNotifCount = 0;
 
-      // Start 5-second interval timer for backend POSTs
-      payloadIntervalId = setInterval(sendAutomated5SecPayload, 5000);
+      // Start 1-second interval timer for backend POSTs
+      payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
 
       // Start Break Check-in Timer (Interval in minutes, supports decimals e.g. 0.1 min = 6s)
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
@@ -395,7 +394,7 @@ async function toggleMicMonitor() {
         if (rawDb > 95) rawDb = 95;
 
         sessionSumDb += rawDb;
-        fiveSecWindowSamples.push(rawDb);
+        oneSecWindowSamples.push(rawDb);
 
         if (rawDb > livePeak) {
           livePeak = rawDb;
