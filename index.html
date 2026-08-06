@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=10" />
+  <link rel="stylesheet" href="css/styles.css?v=11" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -147,9 +147,9 @@
       <div style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.4); border-radius: 16px;">
         <div class="card-header" style="margin-bottom: 8px;">
           <span class="icon">📊</span>
-          <h2>Latest Session Noise Data</h2>
+          <h2>Latest Session Summary</h2>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; margin-top: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; margin-top: 12px; margin-bottom: 16px;">
           <div>
             <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">AVG NOISE</div>
             <div id="summaryAvgDb" style="font-size: 1.2rem; font-weight: 800; color: var(--text);">-- dB</div>
@@ -163,21 +163,16 @@
             <div id="summaryRating" style="font-size: 1.2rem; font-weight: 800; color: var(--label-green);">-- / 5</div>
           </div>
         </div>
-      </div>
 
-      <!-- Log Comfort Level Manual Override Card -->
-      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
-        <div class="card-header" style="margin-bottom: 8px;">
-          <span class="icon">✨</span>
-          <h2>Quick Comfort Rating Log</h2>
-        </div>
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">Rate your overall environment to manually adjust today's score:</p>
-        <div class="rating-grid">
-          <button class="rating-btn" onclick="logComfort(1)">1 😣</button>
-          <button class="rating-btn" onclick="logComfort(2)">2 🙁</button>
-          <button class="rating-btn" onclick="logComfort(3)">3 😐</button>
-          <button class="rating-btn" onclick="logComfort(4)">4 🙂</button>
-          <button class="rating-btn" onclick="logComfort(5)">5 😊</button>
+        <!-- Half-Waveform Noise Level Bar Graph over Session Duration -->
+        <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed rgba(0,0,0,0.12);">
+          <div style="font-size: 0.85rem; font-weight: 800; color: var(--text); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <span>SESSION NOISE WAVEFORM</span>
+            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">Duration Timeline</span>
+          </div>
+          <div style="height: 140px; width: 100%;">
+            <canvas id="waveformChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -272,6 +267,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=10"></script>
+  <script src="js/app.js?v=11"></script>
 </body>
 </html>

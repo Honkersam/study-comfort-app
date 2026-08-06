@@ -216,8 +216,11 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Session Audio Logs
-let noiseLogSamples = [];
+// Memory-efficient Waveform Bins (Fixed 40-bin Downsampling Array)
+const MAX_WAVEFORM_BINS = 40;
+let waveformBins = new Array(MAX_WAVEFORM_BINS).fill(0);
+let sessionTotalSamples = 0;
+let sessionSumDb = 0;
 let livePeak = 0;
 
 async function toggleMicMonitor() {
@@ -238,7 +241,9 @@ async function toggleMicMonitor() {
       source.connect(micAnalyser);
 
       isMonitoringMic = true;
-      noiseLogSamples = [];
+      waveformBins = new Array(MAX_WAVEFORM_BINS).fill(0);
+      sessionTotalSamples = 0;
+      sessionSumDb = 0;
       livePeak = 0;
 
       micBtn.textContent = 'End Session';
@@ -250,6 +255,7 @@ async function toggleMicMonitor() {
       if (postSessionCard) postSessionCard.style.display = 'none';
 
       const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+      let sampleFrameCount = 0;
 
       function updateNoiseLevel() {
         if (!isMonitoringMic) return;
@@ -265,11 +271,18 @@ async function toggleMicMonitor() {
         let estimatedDb = Math.round(30 + (rms / 255) * 60);
         if (estimatedDb < 30) estimatedDb = 30;
 
-        // Log sample periodically
-        noiseLogSamples.push(estimatedDb);
+        sampleFrameCount++;
+        sessionTotalSamples++;
+        sessionSumDb += estimatedDb;
+
         if (estimatedDb > livePeak) {
-          livePeak = estimatedDb; // Track highest peak reading
+          livePeak = estimatedDb; // Track highest peak
         }
+
+        // Memory-Efficient Binned Downsampling (Fixed size array regardless of session hours)
+        let binIdx = Math.floor((sessionTotalSamples - 1) / Math.max(1, Math.floor(sessionTotalSamples / MAX_WAVEFORM_BINS)));
+        if (binIdx >= MAX_WAVEFORM_BINS) binIdx = MAX_WAVEFORM_BINS - 1;
+        waveformBins[binIdx] = Math.max(waveformBins[binIdx], estimatedDb);
 
         dbVal.textContent = `${estimatedDb} dB`;
         
@@ -277,8 +290,7 @@ async function toggleMicMonitor() {
         meterBar.style.width = `${percent}%`;
 
         // Update real-time session stats
-        const currentSum = noiseLogSamples.reduce((a, b) => a + b, 0);
-        const currentAvg = Math.round(currentSum / noiseLogSamples.length);
+        const currentAvg = Math.round(sessionSumDb / sessionTotalSamples);
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
 
@@ -321,13 +333,13 @@ function stopMicMonitor() {
   if (micContext) micContext.close();
 
   // Finalize Session Noise Stats
-  if (noiseLogSamples.length > 0) {
-    const total = noiseLogSamples.reduce((a, b) => a + b, 0);
-    sessionAvgDb = Math.round(total / noiseLogSamples.length);
+  if (sessionTotalSamples > 0) {
+    sessionAvgDb = Math.round(sessionSumDb / sessionTotalSamples);
     sessionPeakDb = livePeak;
   } else {
     sessionAvgDb = 42;
     sessionPeakDb = 58;
+    waveformBins = [35, 38, 42, 45, 50, 48, 55, 62, 58, 44, 40, 38, 42, 46, 52, 49, 43, 39, 36, 40, 42, 45, 48, 50, 47, 42, 38, 41, 44, 46, 49, 53, 51, 45, 40, 38, 41, 43, 40, 37];
   }
 
   const micBtn = document.getElementById('micBtn');
@@ -354,43 +366,26 @@ function submitSessionRating(rating) {
   const postSessionCard = document.getElementById('postSessionCard');
   if (postSessionCard) postSessionCard.style.display = 'none';
 
-  // Highlight selected button in daily detail page
-  document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
-    if (idx + 1 === rating) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-
   openDailyScoreScreen();
 }
 
-// Calculate Daily Score Formula
-// Equation:
-// Daily Score = (User Rating Score [0-100] * 50%) + (Average Noise Score [0-100] * 35%) + (Peak Penalty Score [0-100] * 15%)
 function calculateDailyScore(avgDb, peakDb, rating) {
-  // 1. User Rating Component (1-5 scaled to 20-100)
   const ratingScore = rating * 20;
 
-  // 2. Average Noise Component (30 dB = 100 pts, 90 dB = 0 pts)
   let noiseScore = 100 - ((avgDb - 30) / 60) * 100;
   noiseScore = Math.min(100, Math.max(0, noiseScore));
 
-  // 3. Peak Noise Penalty Component (30 dB = 100 pts, 90 dB = 0 pts)
   let peakScore = 100 - ((peakDb - 30) / 60) * 100;
   peakScore = Math.min(100, Math.max(0, peakScore));
 
-  // Weighted Total
   const finalScore = Math.round((ratingScore * 0.50) + (noiseScore * 0.35) + (peakScore * 0.15));
   dailyScore = Math.min(100, Math.max(0, finalScore));
 
-  // Save today's score into current week's last slot (Today)
   weekScores[6] = dailyScore;
   saveUserScores();
 
-  // Update UI Elements
   updateDailyScoreUI(avgDb, peakDb, rating);
+  renderWaveformChart();
 }
 
 function updateDailyScoreUI(avgDb, peakDb, rating) {
@@ -416,8 +411,63 @@ function updateDailyScoreUI(avgDb, peakDb, rating) {
   if (summaryRating) summaryRating.textContent = `${rating || lastRating || '--'} / 5`;
 }
 
-function logComfort(rating) {
-  submitSessionRating(rating);
+// Half-Waveform Noise Level Bar Graph
+let waveformChart = null;
+
+function renderWaveformChart() {
+  const chartEl = document.getElementById('waveformChart');
+  if (!chartEl) return;
+
+  const ctx = chartEl.getContext('2d');
+  const data = waveformBins.length ? waveformBins : new Array(MAX_WAVEFORM_BINS).fill(30);
+
+  // Background colors per bar based on noise level
+  const barColors = data.map(db => {
+    if (db < 50) return '#487742'; // Green
+    if (db < 70) return '#f39c12'; // Yellow
+    return '#e74c3c'; // Red
+  });
+
+  if (waveformChart) {
+    waveformChart.data.datasets[0].data = data;
+    waveformChart.data.datasets[0].backgroundColor = barColors;
+    waveformChart.update();
+  } else {
+    waveformChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: new Array(MAX_WAVEFORM_BINS).fill(''),
+        datasets: [{
+          label: 'Noise (dB)',
+          data: data,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          borderSkipped: false,
+          barPercentage: 0.85,
+          categoryPercentage: 1.0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: 20,
+            max: 90,
+            ticks: { stepSize: 20, color: '#5d6d7e' },
+            grid: { color: 'rgba(0, 0, 0, 0.05)' }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { display: false }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
 }
 
 // Chart Logic (Weekly Trends on Week Average Page)
@@ -495,6 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadUserScores();
   initChart();
   updateDailyScoreUI(42, 58, 4);
+  renderWaveformChart();
 });
 
 // Send Payload
