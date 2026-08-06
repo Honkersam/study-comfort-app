@@ -15,8 +15,36 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=14" />
+  <link rel="stylesheet" href="css/styles.css?v=15" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Sensitivity Bar Styling */
+    .sensitivity-bar {
+      display: flex;
+      background: rgba(0,0,0,0.06);
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+    .sensitivity-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .sensitivity-btn.active {
+      background: white;
+      color: var(--text);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+  </style>
 </head>
 <body>
 
@@ -86,11 +114,26 @@
       <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Start a study session to log ambient noise, track peak audio, and calculate your daily comfort score.</p>
       
       <!-- Break Interval Configuration Input -->
-      <div style="background: rgba(255,255,255,0.5); padding: 12px; border-radius: 12px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <div style="background: rgba(255,255,255,0.5); padding: 12px; border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
         <label for="breakTimerInput" style="font-size: 0.85rem; font-weight: 800; color: var(--text);">
-          ⏰ Break Check-in Interval (mins):
+          Take a break every
         </label>
-        <input type="number" id="breakTimerInput" step="0.01" min="0.01" value="20" style="width: 100px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.95rem; font-weight: 700; background: white; text-align: center;" />
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <input type="number" id="breakTimerInput" step="0.01" min="0.01" value="20" style="width: 80px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.95rem; font-weight: 700; background: white; text-align: center;" />
+          <span style="font-size: 0.85rem; font-weight: 800; color: var(--text);">minutes.</span>
+        </div>
+      </div>
+
+      <!-- Noise Sensitivity Selector -->
+      <div style="background: rgba(255,255,255,0.5); padding: 12px; border-radius: 12px; margin-bottom: 14px;">
+        <div style="font-size: 0.85rem; font-weight: 800; color: var(--text); margin-bottom: 8px;">
+          Noise Sensitivity:
+        </div>
+        <div class="sensitivity-bar">
+          <button class="sensitivity-btn" id="sensLow" onclick="setSensitivity('low')">Low</button>
+          <button class="sensitivity-btn active" id="sensRegular" onclick="setSensitivity('regular')">Regular</button>
+          <button class="sensitivity-btn" id="sensHigh" onclick="setSensitivity('high')">High</button>
+        </div>
       </div>
 
       <div style="text-align: center; margin-bottom: 12px;">
@@ -302,6 +345,6 @@
     </footer>
   </div>
 
-  <script src="js/app.js?v=14"></script>
+  <script src="js/app.js?v=15"></script>
 </body>
 </html>

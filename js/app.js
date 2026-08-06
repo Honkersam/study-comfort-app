@@ -3,7 +3,8 @@ let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Active User's Session Store
 let todaySessions = []; 
-let breakIntervalMins = 20; // Default 20 mins, stored per user
+let breakIntervalMins = 20; // Default 20 mins
+let sensitivityMode = 'regular'; // 'low', 'regular', 'high'
 
 let sessionAvgDb = 0;
 let sessionPeakDb = 0;
@@ -61,10 +62,12 @@ function loadUserScores() {
         }
         todaySessions = Array.isArray(data.todaySessions) ? data.todaySessions : [];
         breakIntervalMins = typeof data.breakIntervalMins === 'number' ? data.breakIntervalMins : 20;
+        sensitivityMode = ['low', 'regular', 'high'].includes(data.sensitivityMode) ? data.sensitivityMode : 'regular';
         
         const breakInput = document.getElementById('breakTimerInput');
         if (breakInput) breakInput.value = breakIntervalMins;
 
+        updateSensitivityUI();
         renderPastDaysList();
         updateWeekAverage();
         updateDailyScoreUI();
@@ -77,10 +80,12 @@ function loadUserScores() {
   weekScores = [...DEFAULT_SCORES];
   todaySessions = [];
   breakIntervalMins = 20;
+  sensitivityMode = 'regular';
 
   const breakInput = document.getElementById('breakTimerInput');
   if (breakInput) breakInput.value = 20;
 
+  updateSensitivityUI();
   renderPastDaysList();
   updateWeekAverage();
   updateDailyScoreUI();
@@ -94,12 +99,50 @@ function saveUserScores() {
   const payload = {
     weekScores: weekScores,
     todaySessions: todaySessions,
-    breakIntervalMins: breakIntervalMins
+    breakIntervalMins: breakIntervalMins,
+    sensitivityMode: sensitivityMode
   };
 
   localStorage.setItem(localKey, JSON.stringify(payload));
   updateWeekAverage();
   updateChart();
+}
+
+// Noise Sensitivity Mode Handler
+function setSensitivity(mode) {
+  sensitivityMode = mode;
+  updateSensitivityUI();
+  saveUserScores();
+}
+
+function updateSensitivityUI() {
+  const btnLow = document.getElementById('sensLow');
+  const btnReg = document.getElementById('sensRegular');
+  const btnHigh = document.getElementById('sensHigh');
+
+  if (btnLow) btnLow.classList.toggle('active', sensitivityMode === 'low');
+  if (btnReg) btnReg.classList.toggle('active', sensitivityMode === 'regular');
+  if (btnHigh) btnHigh.classList.toggle('active', sensitivityMode === 'high');
+}
+
+// Color Zone Thresholds based on Sensitivity
+function getColorZone(db) {
+  if (sensitivityMode === 'low') {
+    // Shifts ranges higher: needs higher noise before yellow/red
+    if (db < 60) return 'green';
+    if (db < 78) return 'yellow';
+    return 'red';
+  } else if (sensitivityMode === 'high') {
+    // Shifts ranges lower: red is easier to hit with quiet sound
+    if (db < 42) return 'green';
+    if (db < 56) return 'yellow';
+    return 'red';
+  } else {
+    // Regular
+    if (db < 50) return 'green';
+    if (db < 68) return 'yellow';
+    return 'red';
+  }
 }
 
 function updateWeekAverage() {
@@ -243,14 +286,8 @@ let payloadIntervalId = null;
 
 // Break Timer Notification Logic
 let breakTimerId = null;
-let activeNotifCount = 0; // Tracks remaining 1-second payloads with notifExists: true
+let activeNotifCount = 0;
 let lastSentPayload = { score: 50, decible: 40, colour: 'green' };
-
-function getColorZone(db) {
-  if (db < 50) return 'green';
-  if (db < 68) return 'yellow';
-  return 'red';
-}
 
 function getMostRecentDailyScore() {
   if (todaySessions.length > 0) {
@@ -269,7 +306,6 @@ function triggerBreakCheckin() {
     });
   }
 
-  // Keep notifExists: true for 15 subsequent 1-second payload cycles (~15 seconds)
   activeNotifCount = 15;
 
   const immediatePayload = {
@@ -363,7 +399,7 @@ async function toggleMicMonitor() {
       // Start 1-second interval timer for backend POSTs
       payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
 
-      // Start Break Check-in Timer (Interval in minutes, supports decimals e.g. 0.1 min = 6s)
+      // Start Break Check-in Timer
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
       breakTimerId = setInterval(triggerBreakCheckin, breakMs);
 
@@ -414,15 +450,16 @@ async function toggleMicMonitor() {
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
 
-        if (rawDb < 50) {
+        const activeZone = getColorZone(rawDb);
+        if (activeZone === 'green') {
           dbVal.style.color = 'var(--success)';
           meterBar.style.backgroundColor = 'var(--success)';
           noiseLabel.textContent = 'Quiet Study Session 🤫';
           noiseLabel.style.color = 'var(--success)';
-        } else if (rawDb < 68) {
+        } else if (activeZone === 'yellow') {
           dbVal.style.color = 'var(--warning)';
           meterBar.style.backgroundColor = 'var(--warning)';
-          noiseLabel.textContent = 'Normal Conversation / Speaking 🗣️';
+          noiseLabel.textContent = 'Moderate Noise Level ☕';
           noiseLabel.style.color = 'var(--warning)';
         } else {
           dbVal.style.color = 'var(--danger)';
@@ -677,8 +714,9 @@ function renderWaveformChart(customWaveform) {
   }
 
   const barColors = data.map(db => {
-    if (db < 50) return '#487742';
-    if (db < 68) return '#f39c12';
+    const z = getColorZone(db);
+    if (z === 'green') return '#487742';
+    if (z === 'yellow') return '#f39c12';
     return '#e74c3c';
   });
 
