@@ -3,28 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Study Comfort App</title>
-  
+  <title>Study Comfort</title>
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
   <meta name="theme-color" content="#ffe4c9" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=5" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/styles.css?v=4" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
-  <!-- MAIN DASHBOARD SCREEN -->
-  <div id="mainScreen" class="container">
+  <div class="container" id="mainScreen">
     <header class="app-header">
-      <img src="logo.png" alt="Study Comfort Logo" class="header-logo" />
+      <img src="logo.png" alt="Study Comfort App Logo" />
       <h1>The Study Comfort App</h1>
     </header>
 
@@ -51,202 +45,196 @@
     <!-- Top Gauge Score Cards (matching design mock) -->
     <div class="stats-grid">
       <div class="stat-card" id="dailyScoreWidget" onclick="openDailyScoreScreen()" style="cursor: pointer; transition: transform 0.15s ease;">
-        <div class="stat-label">Daily Score</div>
+        <div class="stat-label">Daily Score:</div>
         <div class="gauge-container">
-          <svg class="gauge-svg" viewBox="0 0 100 55">
-            <path class="gauge-bg" d="M 10 50 A 40 40 0 0 1 90 50" />
-            <path class="gauge-fill" d="M 10 50 A 40 40 0 0 1 90 50" stroke-dasharray="91, 126" />
+          <svg class="gauge-svg" viewBox="0 0 120 70">
+            <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" />
+            <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="38" />
           </svg>
-          <div class="gauge-value">73</div>
+          <div class="gauge-value" id="dailyScoreVal">73</div>
         </div>
       </div>
 
       <div class="stat-card" id="weekAvgWidget" onclick="openWeekAvgScreen()" style="cursor: pointer; transition: transform 0.15s ease;">
-        <div class="stat-label">Week Avg</div>
+        <div class="stat-label">Week Avg:</div>
         <div class="gauge-container">
-          <svg class="gauge-svg" viewBox="0 0 100 55">
-            <path class="gauge-bg" d="M 10 50 A 40 40 0 0 1 90 50" />
-            <path id="homeWeekAvgArc" class="gauge-fill" d="M 10 50 A 40 40 0 0 1 90 50" stroke-dasharray="126" stroke-dashoffset="60" />
+          <svg class="gauge-svg" viewBox="0 0 120 70">
+            <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" />
+            <path class="gauge-fill" id="homeWeekAvgArc" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" />
           </svg>
-          <div id="weekAvgVal" class="gauge-value">48</div>
+          <div class="gauge-value" id="weekAvgVal">48</div>
         </div>
       </div>
     </div>
 
-    <!-- Arduino Controller Card -->
+    <!-- Web Notifications Testing Card -->
     <div class="card">
-      <div class="card-header">
-        <span class="icon">🔌</span>
-        <h2>Arduino Controller</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Send custom Score & Notification payload to local server</p>
-      
-      <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div class="card-title">🔔 System Notifications</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Schedules a browser notification alert.
+      </p>
+
+      <button id="notifBtn" class="secondary" style="width: 100%; padding: 10px;" onclick="scheduleNotification()">
+        Send Notification
+      </button>
+      <div id="notifStatus" style="font-size: 0.8rem; color: var(--accent); margin-top: 8px; text-align: center;"></div>
+    </div>
+
+    <!-- Arduino LED / Score Payload Card -->
+    <div class="card">
+      <div class="card-title">📡 Arduino Data Sender</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Send JSON payload to Node.js serial bridge at <code>https://localhost:3001/send</code>.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
-          <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Score (0 - 100):</label>
-          <input type="number" id="scoreInput" min="0" max="100" value="75" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem;" />
+          <label style="font-size: 0.85rem; font-weight: 700; color: #1a1a1a; display: block; margin-bottom: 4px;">Score (0 - 100):</label>
+          <input type="number" id="scoreInput" min="0" max="100" value="75" style="width: 100%; padding: 10px; background: var(--card-inner); border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; font-weight: 600;" />
         </div>
 
         <div>
-          <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Notification Exists:</label>
-          <select id="notifExistsSelect" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem; background: white;">
+          <label style="font-size: 0.85rem; font-weight: 700; color: #1a1a1a; display: block; margin-bottom: 4px;">Notification Exists:</label>
+          <select id="notifExistsSelect" style="width: 100%; padding: 10px; background: var(--card-inner); border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; font-weight: 600;">
             <option value="true">True</option>
             <option value="false">False</option>
           </select>
         </div>
 
-        <button class="btn primary" onclick="sendPayload()" style="margin-top: 6px;">Send Request</button>
-        <div id="status" class="status-msg"></div>
+        <button onclick="sendPayload()" style="width: 100%; padding: 12px; background: var(--accent); color: white; font-weight: 700; border: none; border-radius: 12px; cursor: pointer; margin-top: 4px;">
+          Send Request
+        </button>
       </div>
+
+      <p id="status" style="font-size: 0.85rem; color: #2b2d42; margin-top: 10px; text-align: center; font-weight: 600;"></p>
     </div>
 
-    <!-- Notifications Card -->
+    <!-- Microphone & Noise Monitor Card -->
     <div class="card">
-      <div class="card-header">
-        <span class="icon">🔔</span>
-        <h2>Break Notifications</h2>
+      <div class="card-title">🎙️ Room Noise Monitor</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Live room sound level detection via microphone.</p>
+      
+      <div class="noise-display">
+        <div class="decibel-value" id="dbVal">-- dB</div>
+        <div style="font-size: 0.8rem; font-weight: 600;" id="noiseLabel">Tap start to monitor noise</div>
+        
+        <div class="meter-container">
+          <div class="meter-bar" id="meterBar"></div>
+        </div>
       </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Schedule a 3-second break check-in notification.</p>
-      <button class="btn secondary" onclick="scheduleNotification()">Trigger Notification</button>
-      <div id="notifStatus" class="status-msg"></div>
-    </div>
 
-    <!-- Live Noise Monitor Card -->
-    <div class="card">
-      <div class="card-header">
-        <span class="icon">🎙️</span>
-        <h2>Live Noise Monitor</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Measures live ambient sound level from your microphone.</p>
-      <div style="text-align: center; margin-bottom: 12px;">
-        <div id="dbVal" style="font-size: 2.2rem; font-family: 'Fredoka One', cursive; color: var(--success);">-- dB</div>
-        <div id="noiseLabel" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-top: 4px;">Tap start to monitor noise</div>
-      </div>
-      <div style="width: 100%; height: 10px; background: rgba(0,0,0,0.08); border-radius: 5px; overflow: hidden; margin-bottom: 14px;">
-        <div id="meterBar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.1s ease, background-color 0.2s ease;"></div>
-      </div>
-      <button id="micBtn" class="btn secondary" onclick="toggleMicMonitor()">Start Live Noise Monitor</button>
-    </div>
-
-    <!-- Focus Anthem Player Card -->
-    <div class="card">
-      <div class="card-header">
-        <span class="icon">🎵</span>
-        <h2>Focus Anthem</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Play background study audio for deep focus.</p>
-      <button id="rickrollBtn" class="btn secondary" onclick="toggleRickroll()">
-        <span id="rickStatus">Play Anthem</span>
+      <button id="micBtn" class="secondary" style="width: 100%; margin-top: 15px; padding: 10px;" onclick="toggleMicMonitor()">
+        Start Live Noise Monitor
       </button>
-      <audio id="rickAudio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
     </div>
 
-    <!-- Focus Timer Card -->
+    <!-- Hardware Controls Card -->
     <div class="card">
-      <div class="card-header">
-        <span class="icon">⏱️</span>
-        <h2>Pomodoro Timer</h2>
-      </div>
-      <div id="timer" class="timer-display">25:00</div>
-      <div class="btn-group">
-        <button id="startBtn" class="btn primary">Start</button>
-        <button id="resetBtn" class="btn secondary">Reset</button>
+      <div class="card-title">⚡ Quick Tools</div>
+      <div class="grid-2" style="grid-template-columns: 1fr;">
+        <!-- Never Gonna Give You Up -->
+        <div class="action-card" id="rickrollBtn" onclick="toggleRickroll()">
+          <span class="action-icon">🎵</span>
+          <span class="action-label">Focus Anthem</span>
+          <span class="status-text" id="rickStatus">Play</span>
+        </div>
       </div>
     </div>
 
-    <!-- Spot Map Card -->
+    <!-- Location & Map Card -->
     <div class="card">
-      <div class="card-header">
-        <span class="icon">📍</span>
-        <h2>Study Spot Location</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Find and save your current study location on the map.</p>
-      <button class="btn secondary" onclick="getLocation()">Find My Spot</button>
-      <div id="locationDisplay" class="status-msg"></div>
-      <div id="map" style="height: 180px; width: 100%; border-radius: 12px; margin-top: 12px; display: none;"></div>
+      <div class="card-title">🗺️ Study Spot Map</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);" id="locationDisplay">
+        Tap to locate your study environment on the map.
+      </p>
+      <button class="secondary" style="width: 100%; padding: 10px; margin-top: 10px;" onclick="getLocation()">
+        Show Current Location on Map
+      </button>
+      <div id="map"></div>
     </div>
 
-    <!-- Comfort Ratings Card -->
+    <!-- Timer Card -->
     <div class="card">
-      <div class="card-header">
-        <span class="icon">✨</span>
-        <h2>Log Comfort Rating</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Rate your current study environment comfort (1-5):</p>
-      <div class="rating-grid">
-        <button class="rating-btn" onclick="logComfort(1)">1 😣</button>
-        <button class="rating-btn" onclick="logComfort(2)">2 🙁</button>
-        <button class="rating-btn" onclick="logComfort(3)">3 😐</button>
-        <button class="rating-btn" onclick="logComfort(4)">4 🙂</button>
-        <button class="rating-btn" onclick="logComfort(5)">5 😊</button>
+      <div class="card-title">⏱️ Study Session Timer</div>
+      <div class="timer-display" id="timer">25:00</div>
+      <div class="button-group">
+        <button id="startBtn">Start</button>
+        <button id="resetBtn" class="secondary">Reset</button>
       </div>
     </div>
 
-    <!-- Weekly Chart Card -->
-    <div class="card" style="grid-column: 1 / -1;">
-      <div class="card-header">
-        <span class="icon">📊</span>
-        <h2>Weekly Comfort Trends</h2>
+    <!-- Comfort Check-in Card -->
+    <div class="card">
+      <div class="card-title">💆 Log Comfort Level</div>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">How comfortable is your body/focus right now?</p>
+      <div class="rating-buttons">
+        <button class="rating-btn" onclick="logComfort(1)">😩 1</button>
+        <button class="rating-btn" onclick="logComfort(2)">😕 2</button>
+        <button class="rating-btn" onclick="logComfort(3)">😐 3</button>
+        <button class="rating-btn" onclick="logComfort(4)">🙂 4</button>
+        <button class="rating-btn" onclick="logComfort(5)">😌 5</button>
       </div>
-      <div class="chart-container" style="height: 220px; width: 100%;">
+    </div>
+
+    <!-- Graph Card -->
+    <div class="card">
+      <div class="card-title">📊 Weekly Comfort Score</div>
+      <div class="chart-container">
         <canvas id="comfortChart"></canvas>
       </div>
     </div>
   </div>
 
-  <!-- DAILY SCORE DETAIL SCREEN -->
-  <div id="dailyScoreScreen" class="container screen">
-    <div class="card" style="grid-column: 1 / -1;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-        <button onclick="closeScreens()" class="back-btn" style="background: var(--label-green); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">&#8592;</button>
-        <h2 style="margin: 0; font-size: 1.3rem; color: var(--text);">Daily Comfort Details</h2>
-        <div style="width: 40px;"></div>
-      </div>
+  <!-- Detailed Daily Score Screen -->
+  <div class="screen-page" id="dailyScoreScreen" style="display: none; min-height: 100vh;">
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; grid-column: 1 / -1;">
+      <button onclick="closeScreens()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
+        &#8592;
+      </button>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin: 0;">Daily Score</h2>
+    </div>
 
-      <div style="text-align: center; padding: 20px 0;">
-        <div style="font-size: 1rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">TODAY'S SCORE</div>
-        <div style="font-family: 'Fredoka One', cursive; font-size: 4rem; color: #d9622b;">73</div>
-        <div style="display: inline-block; background: rgba(72, 119, 66, 0.15); color: var(--label-green); padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; margin-top: 10px;">
-          Optimal Comfort
-        </div>
+    <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 20px; grid-column: 1 / -1;">
+      <div class="gauge-container" style="width: 240px; height: 140px;">
+        <svg class="gauge-svg" viewBox="0 0 120 70" style="width: 240px; height: 140px;">
+          <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" style="stroke-width: 10;" />
+          <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="38" style="stroke-width: 10;" />
+        </svg>
+        <div class="gauge-value" style="font-size: 4.2rem; bottom: -5px;">73</div>
       </div>
     </div>
   </div>
 
-  <!-- WEEK AVERAGE DETAIL SCREEN -->
-  <div id="weekAvgScreen" class="container screen">
-    <div class="card" style="grid-column: 1 / -1;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-        <button onclick="closeScreens()" class="back-btn" style="background: var(--label-green); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">&#8592;</button>
-        <h2 style="margin: 0; font-size: 1.3rem; color: var(--text);">7-Day Score Breakdown</h2>
-        <div style="width: 40px;"></div>
-      </div>
+  <!-- Detailed Weekly Average Screen -->
+  <div class="screen-page" id="weekAvgScreen" style="display: none; min-height: 100vh;">
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px; grid-column: 1 / -1;">
+      <button onclick="closeScreens()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
+        &#8592;
+      </button>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin: 0;">Week Average</h2>
+    </div>
 
-      <div style="text-align: center; padding: 10px 0 20px 0;">
-        <div class="gauge-container" style="width: 140px; margin: 0 auto;">
-          <svg class="gauge-svg" viewBox="0 0 100 55">
-            <path class="gauge-bg" d="M 10 50 A 40 40 0 0 1 90 50" />
-            <path id="weekAvgGaugeArc" class="gauge-fill" d="M 10 50 A 40 40 0 0 1 90 50" stroke-dasharray="126" stroke-dashoffset="60" />
-          </svg>
-          <div id="detailWeekAvgVal" class="gauge-value" style="font-size: 2.2rem;">48</div>
-        </div>
-        <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-top: 4px;">7-DAY AVERAGE</div>
+    <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 20px; grid-column: 1 / -1;">
+      <div class="gauge-container" style="width: 240px; height: 140px;">
+        <svg class="gauge-svg" viewBox="0 0 120 70" style="width: 240px; height: 140px;">
+          <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" style="stroke-width: 10;" />
+          <path class="gauge-fill" id="weekAvgGaugeArc" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" style="stroke-width: 10;" />
+        </svg>
+        <div class="gauge-value" id="detailWeekAvgVal" style="font-size: 4.2rem; bottom: -5px;">48</div>
       </div>
+    </div>
 
-      <div id="pastDaysList" style="margin-top: 10px;">
-        <!-- Dynamically rendered past 7 days -->
-      </div>
-
-      <div style="margin-top: 16px;">
-        <button id="saveScoresBtn" onclick="saveGlobalScores()" style="width: 100%; padding: 14px; background: var(--label-green); color: white; font-weight: 800; font-size: 1rem; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-          💾 Save Changes
-        </button>
-        <div id="saveStatusMsg" style="text-align: center; font-size: 0.85rem; font-weight: 700; margin-top: 8px; min-height: 20px;"></div>
+    <!-- Scrollable 7-Day List Card -->
+    <div class="card" style="grid-column: 1 / -1; padding: 20px;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--label-green); margin-bottom: 14px;">Past 7 Days Scores</h3>
+      <div id="pastDaysList" style="display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 4px;">
+        <!-- Day items rendered dynamically via JS -->
       </div>
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="js/app.js?v=5"></script>
+  <audio id="rickAudio" loop preload="auto" src="rickroll.mp3"></audio>
+
+  <script src="js/app.js"></script>
 </body>
 </html>

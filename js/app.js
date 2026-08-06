@@ -25,7 +25,7 @@ function getUserStorageKey(username) {
 }
 
 // User Switching
-async function switchUser() {
+function switchUser() {
   const inputEl = document.getElementById('usernameInput');
   if (!inputEl) return;
   const name = inputEl.value.trim();
@@ -38,15 +38,14 @@ async function switchUser() {
   if (displayEl) displayEl.textContent = currentUser;
   inputEl.value = '';
 
-  await loadGlobalScores();
+  loadUserScores();
 }
 
-// Memory Persistence (LocalStorage + Cloud Storage Sync)
-async function loadGlobalScores() {
+// On-Device Per-User Persistence (Instant & Reliable via LocalStorage)
+function loadUserScores() {
   const localKey = getUserStorageKey(currentUser);
-  
-  // 1. Try local storage
   const cached = localStorage.getItem(localKey);
+  
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
@@ -59,80 +58,17 @@ async function loadGlobalScores() {
     } catch(e) {}
   }
 
-  // 2. Try Cloud API fetch
-  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
-  try {
-    const res = await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.count) {
-        const str = data.count.toString().padStart(14, '0');
-        const remoteScores = [];
-        for (let i = 0; i < 7; i++) {
-          remoteScores.push(parseInt(str.substring(i * 2, i * 2 + 2), 10) || 0);
-        }
-        weekScores = remoteScores;
-        localStorage.setItem(localKey, JSON.stringify(weekScores));
-        renderPastDaysList();
-        updateWeekAverage();
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn('Cloud load error:', err);
-  }
-
-  // 3. Fallback to default scores if no saved record exists yet for this profile
+  // Fallback to default scores if user has no saved record yet
   weekScores = [...DEFAULT_SCORES];
   renderPastDaysList();
   updateWeekAverage();
 }
 
-async function saveGlobalScores() {
-  const statusMsg = document.getElementById('saveStatusMsg');
-  if (statusMsg) {
-    statusMsg.textContent = 'Saving...';
-    statusMsg.style.color = '#7f8c8d';
-  }
-
+function saveUserScores() {
   const localKey = getUserStorageKey(currentUser);
-  
-  // Validate and keep exact integers
   weekScores = weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
-  
-  // Save locally first so it persists across refreshes on this device
   localStorage.setItem(localKey, JSON.stringify(weekScores));
-
-  // Save to cloud using 14-digit integer encoding (2 digits per score)
-  const encodedCount = weekScores.map(s => s.toString().padStart(2, '0')).join('');
-  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
-
-  try {
-    const res = await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/set?count=${encodedCount}`);
-    if (res.ok) {
-      if (statusMsg) {
-        statusMsg.textContent = 'Saved successfully across devices! ✓';
-        statusMsg.style.color = 'var(--label-green)';
-      }
-    } else {
-      if (statusMsg) {
-        statusMsg.textContent = 'Saved locally ✓';
-        statusMsg.style.color = '#d9622b';
-      }
-    }
-  } catch (err) {
-    console.warn('Cloud save error:', err);
-    if (statusMsg) {
-      statusMsg.textContent = 'Saved locally ✓';
-      statusMsg.style.color = '#d9622b';
-    }
-  }
-
   updateWeekAverage();
-
-  setTimeout(() => {
-    if (statusMsg) statusMsg.textContent = '';
-  }, 3000);
 }
 
 function updateWeekAverage() {
@@ -181,7 +117,7 @@ function renderPastDaysList() {
       if (val < 0) val = 0;
       if (val > 100) val = 100;
       weekScores[idx] = val;
-      updateWeekAverage();
+      saveUserScores();
     });
 
     row.appendChild(nameEl);
@@ -233,8 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (displayEl) displayEl.textContent = currentUser;
 
   renderPastDaysList();
-  updateWeekAverage();
-  loadGlobalScores();
+  loadUserScores();
 });
 
 // Send Payload
