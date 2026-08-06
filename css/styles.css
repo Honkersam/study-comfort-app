@@ -7,6 +7,9 @@
   --text: #2b2d42;           /* Crisp dark text */
   --text-muted: #4a4e69;     /* Soft dark muted text */
   --label-green: #487742;    /* Soft sage green label text matching mock */
+  --success: #487742;
+  --warning: #d9622b;
+  --danger: #c0392b;
   --gauge-track: #e0a98b;    /* Unfilled gauge track */
   --gauge-fill: #ffe3d1;     /* Gauge arc fill */
   --gauge-num: #d9622b;      /* Large gauge number orange */
@@ -49,7 +52,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 24px;
-    align-items: start;
+    align-items: stretch;
     margin: 0 auto;
   }
 
@@ -164,6 +167,9 @@ h1, .app-header h1 {
   color: #222;
   box-shadow: 0 4px 14px rgba(224, 122, 95, 0.15);
   border: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .card-title {
@@ -228,19 +234,19 @@ input[type="text"] {
 
 .meter-container, .meter-bg {
   width: 100%;
-  height: 14px;
+  height: 16px;
   background: var(--card-inner);
-  border-radius: 7px;
+  border-radius: 8px;
   overflow: hidden;
   margin: 10px 0;
-  border: none;
+  border: 1px solid rgba(0,0,0,0.08);
 }
 
 .meter-bar, .meter-fill {
   height: 100%;
-  width: 0%;
+  width: 10%;
   background: var(--label-green);
-  transition: width 0.1s ease;
+  transition: width 0.1s ease, background-color 0.2s ease;
 }
 
 /* Rating Buttons */
