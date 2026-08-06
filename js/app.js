@@ -2,7 +2,7 @@
 let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Active User's Session Store
-let todaySessions = []; // Array of session objects: { score, avgDb, peakDb, rating, time }
+let todaySessions = []; // Array of session objects
 let sessionAvgDb = 0;
 let sessionPeakDb = 0;
 
@@ -229,9 +229,10 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Memory-efficient Waveform Bins (Fixed 40-bin Downsampling Array)
+// Chronological Downsampling Bins (Fixed 40-bin Array)
 const MAX_WAVEFORM_BINS = 40;
-let waveformBins = new Array(MAX_WAVEFORM_BINS).fill(0);
+let binSums = new Array(MAX_WAVEFORM_BINS).fill(0);
+let binCounts = new Array(MAX_WAVEFORM_BINS).fill(0);
 let sessionTotalSamples = 0;
 let sessionSumDb = 0;
 let livePeak = 0;
@@ -254,7 +255,8 @@ async function toggleMicMonitor() {
       source.connect(micAnalyser);
 
       isMonitoringMic = true;
-      waveformBins = new Array(MAX_WAVEFORM_BINS).fill(0);
+      binSums = new Array(MAX_WAVEFORM_BINS).fill(0);
+      binCounts = new Array(MAX_WAVEFORM_BINS).fill(0);
       sessionTotalSamples = 0;
       sessionSumDb = 0;
       livePeak = 0;
@@ -290,9 +292,17 @@ async function toggleMicMonitor() {
           livePeak = estimatedDb;
         }
 
-        let binIdx = Math.floor((sessionTotalSamples - 1) / Math.max(1, Math.floor(sessionTotalSamples / MAX_WAVEFORM_BINS)));
-        if (binIdx >= MAX_WAVEFORM_BINS) binIdx = MAX_WAVEFORM_BINS - 1;
-        waveformBins[binIdx] = Math.max(waveformBins[binIdx], estimatedDb);
+        // Chronological Time Mapping: Maps the current sample into its chronological time slot (0 to 39)
+        // As time progresses, samples fill from Left (Start of session) to Right (Current time)
+        let binIdx = Math.min(MAX_WAVEFORM_BINS - 1, Math.floor(((sessionTotalSamples - 1) % (MAX_WAVEFORM_BINS * 10)) / 10));
+        
+        // If session goes long, dynamically assign based on timeline progress ratio
+        if (sessionTotalSamples > MAX_WAVEFORM_BINS) {
+          binIdx = Math.min(MAX_WAVEFORM_BINS - 1, Math.floor(((sessionTotalSamples - 1) / sessionTotalSamples) * MAX_WAVEFORM_BINS));
+        }
+
+        binSums[binIdx] += estimatedDb;
+        binCounts[binIdx]++;
 
         dbVal.textContent = `${estimatedDb} dB`;
         
@@ -341,14 +351,22 @@ function stopMicMonitor() {
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
 
-  // Finalize Session Noise Stats
+  let sessionWaveform = [];
+
   if (sessionTotalSamples > 0) {
     sessionAvgDb = Math.round(sessionSumDb / sessionTotalSamples);
     sessionPeakDb = livePeak;
+
+    // Calculate chronological averages per time bin
+    sessionWaveform = binSums.map((sum, i) => {
+      const count = binCounts[i];
+      return count > 0 ? Math.round(sum / count) : 30;
+    });
   } else {
     sessionAvgDb = 42;
     sessionPeakDb = 58;
-    waveformBins = [35, 38, 42, 45, 50, 48, 55, 62, 58, 44, 40, 38, 42, 46, 52, 49, 43, 39, 36, 40, 42, 45, 48, 50, 47, 42, 38, 41, 44, 46, 49, 53, 51, 45, 40, 38, 41, 43, 40, 37];
+    // Fallback chronological timeline sequence (Not sorted)
+    sessionWaveform = [35, 48, 42, 35, 62, 48, 55, 38, 58, 44, 40, 58, 42, 46, 32, 49, 43, 59, 36, 40, 62, 45, 38, 50, 47, 42, 58, 41, 44, 46, 39, 53, 31, 45, 40, 58, 41, 43, 40, 37];
   }
 
   const micBtn = document.getElementById('micBtn');
@@ -365,10 +383,11 @@ function stopMicMonitor() {
 
   const postSessionCard = document.getElementById('postSessionCard');
   if (postSessionCard) postSessionCard.style.display = 'block';
+
+  window.lastSessionWaveform = sessionWaveform;
 }
 
 function submitSessionRating(rating) {
-  // Calculate score for THIS specific session
   const ratingScore = rating * 20;
 
   let noiseScore = 100 - ((sessionAvgDb - 30) / 60) * 100;
@@ -384,10 +403,10 @@ function submitSessionRating(rating) {
     avgDb: sessionAvgDb,
     peakDb: sessionPeakDb,
     rating: rating,
+    waveform: window.lastSessionWaveform || new Array(MAX_WAVEFORM_BINS).fill(30),
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
 
-  // Add session to user's daily session log
   todaySessions.push(newSession);
   saveUserScores();
 
@@ -395,11 +414,10 @@ function submitSessionRating(rating) {
   if (postSessionCard) postSessionCard.style.display = 'none';
 
   updateDailyScoreUI();
-  renderWaveformChart();
+  renderWaveformChart(newSession.waveform);
   openDailyScoreScreen();
 }
 
-// Update Daily Score UI based on average of all sessions completed today
 function updateDailyScoreUI() {
   const homeVal = document.getElementById('homeDailyVal');
   const detailVal = document.getElementById('detailDailyScoreVal');
@@ -418,7 +436,6 @@ function updateDailyScoreUI() {
       comfortBadge.style.color = 'var(--text-muted)';
     }
   } else {
-    // Average score across all today's sessions
     const totalScore = todaySessions.reduce((sum, s) => sum + s.score, 0);
     const avgScore = Math.round(totalScore / todaySessions.length);
 
@@ -451,7 +468,6 @@ function updateDailyScoreUI() {
     }
   }
 
-  // Populate Today's Sessions List inside Daily Score screen
   const sessionsList = document.getElementById('todaySessionsList');
   if (sessionsList) {
     if (todaySessions.length === 0) {
@@ -479,11 +495,9 @@ function triggerNewDayForAllUsers() {
   const statusEl = document.getElementById('newDayStatus');
   if (statusEl) statusEl.textContent = 'Advancing day for all users...';
 
-  // Find all user keys in localStorage
   const keys = Object.keys(localStorage).filter(k => k.startsWith('study_comfort_v3_'));
   
   if (keys.length === 0) {
-    // Save current user key if first time
     const currentKey = getUserStorageKey(currentUser);
     keys.push(currentKey);
   }
@@ -498,11 +512,9 @@ function triggerNewDayForAllUsers() {
         const sum = userData.todaySessions.reduce((a, b) => a + b.score, 0);
         finalDailyScore = Math.round(sum / userData.todaySessions.length);
       } else {
-        // If no sessions were run, fall back to current 7-day average or baseline
         finalDailyScore = 50;
       }
 
-      // Shift 7-day array: drop oldest day [0], append new day score at end [6]
       if (Array.isArray(userData.weekScores) && userData.weekScores.length === 7) {
         userData.weekScores.shift();
         userData.weekScores.push(finalDailyScore);
@@ -510,16 +522,13 @@ function triggerNewDayForAllUsers() {
         userData.weekScores = [24, 32, 41, 87, 65, 42, finalDailyScore];
       }
 
-      // Reset today's sessions to empty for the new day
       userData.todaySessions = [];
-
       localStorage.setItem(key, JSON.stringify(userData));
     } catch(err) {
       console.warn('Error processing key:', key, err);
     }
   });
 
-  // Reload current user state
   loadUserScores();
 
   if (statusEl) {
@@ -529,15 +538,23 @@ function triggerNewDayForAllUsers() {
   }
 }
 
-// Half-Waveform Noise Level Bar Graph
+// Chronological Half-Waveform Noise Level Bar Graph
 let waveformChart = null;
 
-function renderWaveformChart() {
+function renderWaveformChart(customWaveform) {
   const chartEl = document.getElementById('waveformChart');
   if (!chartEl) return;
 
   const ctx = chartEl.getContext('2d');
-  const data = waveformBins.length ? waveformBins : new Array(MAX_WAVEFORM_BINS).fill(30);
+  
+  // Use passed session waveform or fall back to last session
+  let data = customWaveform;
+  if (!data && todaySessions.length > 0) {
+    data = todaySessions[todaySessions.length - 1].waveform;
+  }
+  if (!data || !data.length) {
+    data = [35, 48, 42, 35, 62, 48, 55, 38, 58, 44, 40, 58, 42, 46, 32, 49, 43, 59, 36, 40, 62, 45, 38, 50, 47, 42, 58, 41, 44, 46, 39, 53, 31, 45, 40, 58, 41, 43, 40, 37];
+  }
 
   const barColors = data.map(db => {
     if (db < 50) return '#487742';
@@ -553,7 +570,7 @@ function renderWaveformChart() {
     waveformChart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: new Array(MAX_WAVEFORM_BINS).fill(''),
+        labels: new Array(data.length).fill(''),
         datasets: [{
           label: 'Noise (dB)',
           data: data,
