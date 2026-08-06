@@ -128,20 +128,48 @@ function updateSensitivityUI() {
 // Color Zone Thresholds based on Sensitivity
 function getColorZone(db) {
   if (sensitivityMode === 'low') {
-    // Shifts ranges higher: needs higher noise before yellow/red
     if (db < 60) return 'green';
     if (db < 78) return 'yellow';
     return 'red';
   } else if (sensitivityMode === 'high') {
-    // Shifts ranges lower: red is easier to hit with quiet sound
     if (db < 42) return 'green';
     if (db < 56) return 'yellow';
     return 'red';
   } else {
-    // Regular
     if (db < 50) return 'green';
     if (db < 68) return 'yellow';
     return 'red';
+  }
+}
+
+// Developer Console Logger for Backend Communication
+function logBackendMessage(msg, isSuccess = true) {
+  const consoleEl = document.getElementById('backendConsole');
+  if (!consoleEl) return;
+
+  const timeStr = new Date().toLocaleTimeString();
+  const logItem = document.createElement('div');
+  logItem.className = 'log-item';
+
+  const timeSpan = document.createElement('span');
+  timeSpan.className = 'log-time';
+  timeSpan.textContent = `[${timeStr}]`;
+
+  const msgSpan = document.createElement('span');
+  msgSpan.className = isSuccess ? 'log-success' : 'log-error';
+  msgSpan.textContent = msg;
+
+  logItem.appendChild(timeSpan);
+  logItem.appendChild(msgSpan);
+
+  consoleEl.appendChild(logItem);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function clearBackendConsole() {
+  const consoleEl = document.getElementById('backendConsole');
+  if (consoleEl) {
+    consoleEl.innerHTML = '<div class="log-item"><span class="log-time">[System]</span> Console cleared.</div>';
   }
 }
 
@@ -156,10 +184,10 @@ function updateWeekAverage() {
 
   const offset = 141.37 * (1 - (avg / 100));
 
-  const homeArc = document.getElementById('homeWeekAvgArc');
+  const homeArc = document.getElementById('homeDailyGaugeArc');
   const detailArc = document.getElementById('weekAvgGaugeArc');
 
-  if (homeArc) homeArc.setAttribute('stroke-dashoffset', offset);
+  if (homeArc && todaySessions.length === 0) homeArc.setAttribute('stroke-dashoffset', 126);
   if (detailArc) detailArc.setAttribute('stroke-dashoffset', offset);
 }
 
@@ -315,7 +343,7 @@ function triggerBreakCheckin() {
     notifExists: true
   };
 
-  console.log("Break Notification Triggered! Sending IMMEDIATE Payload:", immediatePayload);
+  logBackendMessage(`[IMMEDIATE BREAK POST] Sending: ${JSON.stringify(immediatePayload)}`, true);
 
   fetch('https://localhost:3001/send', {
     method: 'POST',
@@ -323,11 +351,11 @@ function triggerBreakCheckin() {
     body: JSON.stringify(immediatePayload)
   })
   .then(res => {
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   })
-  .then(text => console.log("Immediate Break Payload Success:", text))
-  .catch(err => console.warn("Immediate Break Payload Error:", err.message));
+  .then(text => logBackendMessage(`✓ Immediate Break POST Success: ${text}`, true))
+  .catch(err => logBackendMessage(`✗ Immediate Break POST Error: ${err.message}`, false));
 }
 
 function sendAutomated1SecPayload() {
@@ -357,19 +385,21 @@ function sendAutomated1SecPayload() {
 
   lastSentPayload = { score: recentScore, decible: avg1SecDb, colour: activeColor };
 
-  console.log("Sending 1-Sec Window Payload:", payload);
-
   fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
   .then(res => {
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   })
-  .then(text => console.log("Backend POST Success:", text))
-  .catch(err => console.warn("Backend POST Error (local server offline?):", err.message));
+  .then(text => {
+    logBackendMessage(`✓ 1s Payload Sent (db:${avg1SecDb}, color:${activeColor}, notif:${notifExists}) -> ${text}`, true);
+  })
+  .catch(err => {
+    logBackendMessage(`✗ 1s Payload Error (db:${avg1SecDb}, color:${activeColor}, notif:${notifExists}) -> ${err.message}`, false);
+  });
 }
 
 async function toggleMicMonitor() {
@@ -395,6 +425,8 @@ async function toggleMicMonitor() {
       sessionSumDb = 0;
       livePeak = 0;
       activeNotifCount = 0;
+
+      logBackendMessage("=== Study Session Started (Backend Monitoring Active) ===", true);
 
       // Start 1-second interval timer for backend POSTs
       payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
@@ -475,6 +507,7 @@ async function toggleMicMonitor() {
 
     } catch (err) {
       console.error("Microphone error:", err);
+      logBackendMessage(`✗ Microphone Access Error: ${err.message}`, false);
       alert(`Microphone Error: ${err.message}`);
       return;
     }
@@ -515,6 +548,8 @@ function stopMicMonitor() {
 
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
+
+  logBackendMessage("=== Study Session Ended ===", true);
 
   let sessionWaveform = resampleTimeline(timelineSamples, MAX_TIMELINE_POINTS);
 
@@ -863,21 +898,25 @@ function sendPayload() {
     notifExists: notifExists
   };
 
+  logBackendMessage(`[Manual POST] Sending: ${JSON.stringify(payload)}`, true);
+
   fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
   .then(res => {
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.text();
   })
   .then(text => {
     statusEl.textContent = `Success: ${text}`;
+    logBackendMessage(`✓ Manual POST Success: ${text}`, true);
   })
   .catch(err => {
     console.error("Fetch Error:", err);
     statusEl.textContent = `Error: ${err.name} - ${err.message}`;
+    logBackendMessage(`✗ Manual POST Error: ${err.message}`, false);
   });
 }
 
