@@ -3,6 +3,8 @@ let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Active User's Session Store
 let todaySessions = []; 
+let breakIntervalMins = 20; // Default 20 mins, stored per user
+
 let sessionAvgDb = 0;
 let sessionPeakDb = 0;
 
@@ -58,7 +60,11 @@ function loadUserScores() {
           weekScores = data.weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
         }
         todaySessions = Array.isArray(data.todaySessions) ? data.todaySessions : [];
+        breakIntervalMins = typeof data.breakIntervalMins === 'number' ? data.breakIntervalMins : 20;
         
+        const breakInput = document.getElementById('breakTimerInput');
+        if (breakInput) breakInput.value = breakIntervalMins;
+
         renderPastDaysList();
         updateWeekAverage();
         updateDailyScoreUI();
@@ -70,6 +76,11 @@ function loadUserScores() {
 
   weekScores = [...DEFAULT_SCORES];
   todaySessions = [];
+  breakIntervalMins = 20;
+
+  const breakInput = document.getElementById('breakTimerInput');
+  if (breakInput) breakInput.value = 20;
+
   renderPastDaysList();
   updateWeekAverage();
   updateDailyScoreUI();
@@ -82,7 +93,8 @@ function saveUserScores() {
   
   const payload = {
     weekScores: weekScores,
-    todaySessions: todaySessions
+    todaySessions: todaySessions,
+    breakIntervalMins: breakIntervalMins
   };
 
   localStorage.setItem(localKey, JSON.stringify(payload));
@@ -108,6 +120,7 @@ function updateWeekAverage() {
   if (detailArc) detailArc.setAttribute('stroke-dashoffset', offset);
 }
 
+// Render Immutable Week Average List
 function renderPastDaysList() {
   const listContainer = document.getElementById('pastDaysList');
   if (!listContainer) return;
@@ -123,24 +136,14 @@ function renderPastDaysList() {
     nameEl.className = 'day-name';
     nameEl.textContent = name;
 
-    const inputEl = document.createElement('input');
-    inputEl.type = 'number';
-    inputEl.min = '0';
-    inputEl.max = '100';
-    inputEl.className = 'day-score-input';
-    inputEl.value = weekScores[idx];
-
-    inputEl.addEventListener('input', (e) => {
-      let val = parseInt(e.target.value, 10);
-      if (isNaN(val)) val = 0;
-      if (val < 0) val = 0;
-      if (val > 100) val = 100;
-      weekScores[idx] = val;
-      saveUserScores();
-    });
+    const valEl = document.createElement('div');
+    valEl.style.fontSize = '1.1rem';
+    valEl.style.fontWeight = '800';
+    valEl.style.color = '#d9622b';
+    valEl.textContent = `${weekScores[idx]} pts`;
 
     row.appendChild(nameEl);
-    row.appendChild(inputEl);
+    row.appendChild(valEl);
     listContainer.appendChild(row);
   });
 }
@@ -234,10 +237,13 @@ let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Automatic Backend Payload Sender Logic (Every 5 seconds)
+// Automatic Backend Payload Sender Logic
 let fiveSecWindowSamples = [];
 let payloadIntervalId = null;
-let lastSentColor = null;
+
+// Break Timer Notification Logic
+let breakTimerId = null;
+let activeNotifCount = 0; // Remains true for 3 payload cycles (~15s) when triggered
 
 function getColorZone(db) {
   if (db < 50) return 'green';
@@ -253,17 +259,34 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
+// Trigger desktop break notification + set notifExists: true
+function triggerBreakCheckin() {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Protogen Study Comfort', {
+      body: '🧘 Time for a quick break check-in! Stretch your legs and rest your eyes.',
+      icon: 'icon-192.png'
+    });
+  }
+  // Set notifExists true for next 3 payload cycles (~15 seconds)
+  activeNotifCount = 3;
+  console.log("Break Notification Triggered! notifExists will be TRUE for next 3 payload cycles.");
+}
+
 function sendAutomated5SecPayload() {
   if (!isMonitoringMic || fiveSecWindowSamples.length === 0) return;
 
-  // Calculate average decibels over the last 5 seconds
   const sum = fiveSecWindowSamples.reduce((a, b) => a + b, 0);
   const avg5SecDb = Math.round(sum / fiveSecWindowSamples.length);
-  fiveSecWindowSamples = []; // Clear buffer for next 5s window
+  fiveSecWindowSamples = [];
 
   const activeColor = getColorZone(avg5SecDb);
-  const notifExists = (lastSentColor !== null && lastSentColor !== activeColor);
   const recentScore = getMostRecentDailyScore();
+
+  // notifExists is true if activeNotifCount > 0, then decrements
+  const notifExists = (activeNotifCount > 0);
+  if (activeNotifCount > 0) {
+    activeNotifCount--;
+  }
 
   const payload = {
     score: recentScore,
@@ -285,11 +308,9 @@ function sendAutomated5SecPayload() {
   })
   .then(text => {
     console.log("Backend POST Success:", text);
-    lastSentColor = activeColor;
   })
   .catch(err => {
     console.warn("Backend POST Error (local server offline?):", err.message);
-    lastSentColor = activeColor;
   });
 }
 
@@ -315,10 +336,14 @@ async function toggleMicMonitor() {
       fiveSecWindowSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
-      lastSentColor = null;
+      activeNotifCount = 0;
 
       // Start 5-second interval timer for backend POSTs
       payloadIntervalId = setInterval(sendAutomated5SecPayload, 5000);
+
+      // Start Break Check-in Timer (Interval in minutes, supports decimals e.g. 0.1 min = 6s)
+      const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
+      breakTimerId = setInterval(triggerBreakCheckin, breakMs);
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -347,7 +372,7 @@ async function toggleMicMonitor() {
         if (rawDb > 95) rawDb = 95;
 
         sessionSumDb += rawDb;
-        fiveSecWindowSamples.push(rawDb); // Accumulate samples for 5s averaging
+        fiveSecWindowSamples.push(rawDb);
 
         if (rawDb > livePeak) {
           livePeak = rawDb;
@@ -427,6 +452,8 @@ function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
   if (payloadIntervalId) clearInterval(payloadIntervalId);
+  if (breakTimerId) clearInterval(breakTimerId);
+
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
 
@@ -736,6 +763,17 @@ function updateChart() {
 document.addEventListener('DOMContentLoaded', () => {
   const displayEl = document.getElementById('currentUserDisplay');
   if (displayEl) displayEl.textContent = currentUser;
+
+  // Listen to Break Check-in Interval changes and auto-save per user
+  const breakInput = document.getElementById('breakTimerInput');
+  if (breakInput) {
+    breakInput.addEventListener('input', (e) => {
+      let val = parseFloat(e.target.value);
+      if (isNaN(val) || val <= 0) val = 0.1;
+      breakIntervalMins = val;
+      saveUserScores();
+    });
+  }
 
   if (window.location.hash === '#daily-score') {
     openDailyScoreScreen();
