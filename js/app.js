@@ -234,9 +234,6 @@ let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Exponential Moving Average (EMA) smoother for real-time display UI
-let smoothedDb = 32;
-
 async function toggleMicMonitor() {
   const micBtn = document.getElementById('micBtn');
   const dbVal = document.getElementById('dbVal');
@@ -258,7 +255,6 @@ async function toggleMicMonitor() {
       timelineSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
-      smoothedDb = 32;
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -276,47 +272,43 @@ async function toggleMicMonitor() {
 
         micAnalyser.getByteFrequencyData(dataArray);
 
-        // Standard SPL Decibel Calibration (30 dB ambient room floor, ~60-65 dB normal speech, ~80+ dB loud noise)
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i] * dataArray[i];
         }
         const rms = Math.sqrt(sum / dataArray.length);
 
-        // Calibrated logarithmic-like SPL mapping
+        // Direct, raw decibel reading
         let rawDb = Math.round(30 + (rms / 200) * 55);
         if (rawDb < 30) rawDb = 30;
         if (rawDb > 95) rawDb = 95;
 
-        // Exponential Moving Average (EMA) smoothing for stable UI display (reduces jumpiness)
-        smoothedDb = Math.round((0.15 * rawDb) + (0.85 * smoothedDb));
-
-        sessionSumDb += smoothedDb;
-        if (smoothedDb > livePeak) {
-          livePeak = smoothedDb;
+        sessionSumDb += rawDb;
+        if (rawDb > livePeak) {
+          livePeak = rawDb;
         }
 
-        // Sample into chronological time-series every 15 animation frames (~4 times per second)
+        // Sample into time-series array directly
         frameCounter++;
         if (frameCounter % 15 === 0) {
-          timelineSamples.push(smoothedDb);
+          timelineSamples.push(rawDb);
         }
 
-        dbVal.textContent = `${smoothedDb} dB`;
+        dbVal.textContent = `${rawDb} dB`;
         
-        let percent = Math.min(100, Math.max(0, ((smoothedDb - 30) / 60) * 100));
+        let percent = Math.min(100, Math.max(0, ((rawDb - 30) / 60) * 100));
         meterBar.style.width = `${percent}%`;
 
         const currentAvg = Math.round(sessionSumDb / Math.max(1, frameCounter));
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
 
-        if (smoothedDb < 50) {
+        if (rawDb < 50) {
           dbVal.style.color = 'var(--success)';
           meterBar.style.backgroundColor = 'var(--success)';
           noiseLabel.textContent = 'Quiet Study Session 🤫';
           noiseLabel.style.color = 'var(--success)';
-        } else if (smoothedDb < 68) {
+        } else if (rawDb < 68) {
           dbVal.style.color = 'var(--warning)';
           meterBar.style.backgroundColor = 'var(--warning)';
           noiseLabel.textContent = 'Normal Conversation / Speaking 🗣️';
@@ -360,7 +352,6 @@ function resampleTimeline(rawSamples, targetSize) {
     const end = Math.floor((i + 1) * chunkSize);
     const chunk = rawSamples.slice(start, end);
     if (chunk.length > 0) {
-      // Pick representative average/peak in time slice
       const avg = Math.round(chunk.reduce((a, b) => a + b, 0) / chunk.length);
       result.push(avg);
     }
@@ -493,7 +484,7 @@ function updateDailyScoreUI() {
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.6); border-radius: 10px;">
           <div>
             <div style="font-weight: 800; font-size: 0.95rem; color: var(--text);">Session #${idx + 1} (${s.time})</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+            <div style="font-size: 0.8 grand; color: var(--text-muted); font-weight: 600;">
               Avg: ${s.avgDb} dB | Peak: ${s.peakDb} dB | Rating: ${s.rating}/5
             </div>
           </div>
