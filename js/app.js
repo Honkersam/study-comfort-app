@@ -1,4 +1,84 @@
 // Navigation Screen Handlers
+// 7-day initial score data (last element = day before today)
+let weekScores = [56, 24, 32, 41, 87, 65, 42];
+
+function getPast7DaysNames() {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayIndex = new Date().getDay();
+  const dayNames = [];
+
+  for (let i = 7; i >= 1; i--) {
+    let dIdx = (todayIndex - i) % 7;
+    if (dIdx < 0) dIdx += 7;
+    dayNames.push(days[dIdx]);
+  }
+  return dayNames;
+}
+
+function updateWeekAverage() {
+  const sum = weekScores.reduce((acc, val) => acc + val, 0);
+  const avg = Math.round(sum / weekScores.length);
+
+  // Update homepage display & arc
+  const homeVal = document.getElementById('weekAvgVal');
+  const detailVal = document.getElementById('detailWeekAvgVal');
+  if (homeVal) homeVal.textContent = avg;
+  if (detailVal) detailVal.textContent = avg;
+
+  // Arc calculation: circumference = 141.37
+  // offset = 141.37 * (1 - avg / 100)
+  const offset = 141.37 * (1 - (avg / 100));
+
+  const homeArc = document.getElementById('homeWeekAvgArc');
+  const detailArc = document.getElementById('weekAvgGaugeArc');
+
+  if (homeArc) homeArc.setAttribute('stroke-dashoffset', offset);
+  if (detailArc) detailArc.setAttribute('stroke-dashoffset', offset);
+}
+
+function renderPastDaysList() {
+  const listContainer = document.getElementById('pastDaysList');
+  if (!listContainer) return;
+
+  const dayNames = getPast7DaysNames();
+  listContainer.innerHTML = '';
+
+  dayNames.forEach((name, idx) => {
+    const row = document.createElement('div');
+    row.className = 'day-row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'day-name';
+    nameEl.textContent = name;
+
+    const inputEl = document.createElement('input');
+    inputEl.type = 'number';
+    inputEl.min = '0';
+    inputEl.max = '100';
+    inputEl.className = 'day-score-input';
+    inputEl.value = weekScores[idx];
+
+    inputEl.addEventListener('input', (e) => {
+      let val = parseInt(e.target.value, 10);
+      if (isNaN(val)) val = 0;
+      if (val < 0) val = 0;
+      if (val > 100) val = 100;
+      weekScores[idx] = val;
+      updateWeekAverage();
+    });
+
+    row.appendChild(nameEl);
+    row.appendChild(inputEl);
+    listContainer.appendChild(row);
+  });
+}
+
+// Initialize Week Average calculation and day list on load
+document.addEventListener('DOMContentLoaded', () => {
+  renderPastDaysList();
+  updateWeekAverage();
+});
+
 function openDailyScoreScreen() {
   document.getElementById('mainScreen').style.display = 'none';
   document.getElementById('dailyScoreScreen').style.display = 'grid';
@@ -10,6 +90,8 @@ function openWeekAvgScreen() {
   document.getElementById('mainScreen').style.display = 'none';
   document.getElementById('dailyScoreScreen').style.display = 'none';
   document.getElementById('weekAvgScreen').style.display = 'grid';
+  renderPastDaysList();
+  updateWeekAverage();
   window.location.hash = 'week-avg';
 }
 

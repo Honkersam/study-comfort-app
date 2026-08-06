@@ -40,7 +40,7 @@
         <div class="gauge-container">
           <svg class="gauge-svg" viewBox="0 0 120 70">
             <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" />
-            <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" />
+            <path class="gauge-fill" id="homeWeekAvgArc" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" />
           </svg>
           <div class="gauge-value" id="weekAvgVal">48</div>
         </div>
@@ -198,9 +198,17 @@
       <div class="gauge-container" style="width: 240px; height: 140px;">
         <svg class="gauge-svg" viewBox="0 0 120 70" style="width: 240px; height: 140px;">
           <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" style="stroke-width: 10;" />
-          <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" style="stroke-width: 10;" />
+          <path class="gauge-fill" id="weekAvgGaugeArc" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="73" style="stroke-width: 10;" />
         </svg>
-        <div class="gauge-value" style="font-size: 4.2rem; bottom: -5px;">48</div>
+        <div class="gauge-value" id="detailWeekAvgVal" style="font-size: 4.2rem; bottom: -5px;">48</div>
+      </div>
+    </div>
+
+    <!-- Scrollable 7-Day List Card -->
+    <div class="card" style="grid-column: 1 / -1; padding: 20px;">
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--label-green); margin-bottom: 14px;">Past 7 Days Scores</h3>
+      <div id="pastDaysList" style="display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 4px;">
+        <!-- Day items rendered dynamically via JS -->
       </div>
     </div>
   </div>

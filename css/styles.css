@@ -250,7 +250,36 @@ input[type="text"] {
   transition: width 0.1s ease, background-color 0.2s ease;
 }
 
-/* Rating Buttons */
+/* Day row styling matching Figma mockup */
+.day-row {
+  background-color: var(--card-inner);
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.day-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--label-green);
+}
+
+.day-score-input {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--gauge-num);
+  font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif;
+  width: 65px;
+  text-align: right;
+  background: transparent;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  padding: 4px 6px;
+  outline: none;
+}
 .rating-buttons, .rating-group {
   display: flex;
   justify-content: space-between;
