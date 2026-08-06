@@ -41,7 +41,7 @@ function switchUser() {
   loadUserScores();
 }
 
-// On-Device Per-User Persistence (Instant & Reliable via LocalStorage)
+// On-Device Per-User Persistence
 function loadUserScores() {
   const localKey = getUserStorageKey(currentUser);
   const cached = localStorage.getItem(localKey);
@@ -128,25 +128,41 @@ function renderPastDaysList() {
 
 // Navigation between Screens
 function openDailyScoreScreen() {
-  document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('dailyScoreScreen').style.display = 'grid';
-  document.getElementById('weekAvgScreen').style.display = 'none';
+  const mainScreen = document.getElementById('mainScreen');
+  const dailyScoreScreen = document.getElementById('dailyScoreScreen');
+  const weekAvgScreen = document.getElementById('weekAvgScreen');
+
+  mainScreen.classList.add('hidden');
+  weekAvgScreen.classList.remove('active');
+  dailyScoreScreen.classList.add('active');
+
   window.location.hash = 'daily-score';
 }
 
 function openWeekAvgScreen() {
-  document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('dailyScoreScreen').style.display = 'none';
-  document.getElementById('weekAvgScreen').style.display = 'grid';
+  const mainScreen = document.getElementById('mainScreen');
+  const dailyScoreScreen = document.getElementById('dailyScoreScreen');
+  const weekAvgScreen = document.getElementById('weekAvgScreen');
+
+  mainScreen.classList.add('hidden');
+  dailyScoreScreen.classList.remove('active');
+  weekAvgScreen.classList.add('active');
+
   renderPastDaysList();
   updateWeekAverage();
+
   window.location.hash = 'week-avg';
 }
 
 function closeScreens() {
-  document.getElementById('dailyScoreScreen').style.display = 'none';
-  document.getElementById('weekAvgScreen').style.display = 'none';
-  document.getElementById('mainScreen').style.display = 'grid';
+  const mainScreen = document.getElementById('mainScreen');
+  const dailyScoreScreen = document.getElementById('dailyScoreScreen');
+  const weekAvgScreen = document.getElementById('weekAvgScreen');
+
+  dailyScoreScreen.classList.remove('active');
+  weekAvgScreen.classList.remove('active');
+  mainScreen.classList.remove('hidden');
+
   if (window.location.hash) {
     history.pushState("", document.title, window.location.pathname + window.location.search);
   }
@@ -167,6 +183,15 @@ window.addEventListener('popstate', () => {
 document.addEventListener('DOMContentLoaded', () => {
   const displayEl = document.getElementById('currentUserDisplay');
   if (displayEl) displayEl.textContent = currentUser;
+
+  // Restore screen state based on hash if present
+  if (window.location.hash === '#daily-score') {
+    openDailyScoreScreen();
+  } else if (window.location.hash === '#week-avg') {
+    openWeekAvgScreen();
+  } else {
+    closeScreens();
+  }
 
   renderPastDaysList();
   loadUserScores();
@@ -329,119 +354,6 @@ function stopMicMonitor() {
   document.getElementById('meterBar').style.width = '0%';
   document.getElementById('noiseLabel').textContent = 'Tap start to monitor noise';
   document.getElementById('noiseLabel').style.color = 'var(--text-muted)';
-}
-
-// Focus Anthem Player
-const rickAudio = document.getElementById('rickAudio');
-let isPlayingRick = false;
-
-function toggleRickroll() {
-  const btn = document.getElementById('rickrollBtn');
-  const status = document.getElementById('rickStatus');
-
-  if (!isPlayingRick) {
-    rickAudio.play().then(() => {
-      isPlayingRick = true;
-      btn.classList.add('active');
-      status.textContent = 'Playing 🎶';
-    }).catch(err => {
-      alert('Audio playback error: ' + err.message);
-    });
-  } else {
-    rickAudio.pause();
-    isPlayingRick = false;
-    btn.classList.remove('active');
-    status.textContent = 'Play';
-  }
-}
-
-// Map Location
-let map = null;
-let marker = null;
-
-async function getLocation() {
-  const display = document.getElementById('locationDisplay');
-  const mapDiv = document.getElementById('map');
-  display.textContent = 'Locating study environment...';
-
-  try {
-    let lat, lon;
-
-    if (navigator.geolocation) {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
-      });
-      lat = pos.coords.latitude;
-      lon = pos.coords.longitude;
-    } else {
-      throw new Error('Geolocation unavailable');
-    }
-
-    display.textContent = 'Study location found!';
-    mapDiv.style.display = 'block';
-
-    if (!map) {
-      map = L.map('map').setView([lat, lon], 15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-      }).addTo(map);
-      marker = L.marker([lat, lon]).addTo(map)
-        .bindPopup('<b>Study Location</b><br/>You are here!')
-        .openPopup();
-    } else {
-      map.setView([lat, lon], 15);
-      marker.setLatLng([lat, lon]);
-    }
-    setTimeout(() => map.invalidateSize(), 200);
-
-  } catch (err) {
-    display.textContent = 'Unable to retrieve location: ' + err.message;
-  }
-}
-
-// Timer Logic
-let timeLeft = 25 * 60;
-let timerId = null;
-
-const timerDisplay = document.getElementById('timer');
-const startBtn = document.getElementById('startBtn');
-const resetBtn = document.getElementById('resetBtn');
-
-if (startBtn && resetBtn) {
-  function updateDisplay() {
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  }
-
-  startBtn.addEventListener('click', () => {
-    if (timerId === null) {
-      timerId = setInterval(() => {
-        if (timeLeft > 0) {
-          timeLeft--;
-          updateDisplay();
-        } else {
-          clearInterval(timerId);
-          timerId = null;
-          startBtn.textContent = 'Start';
-          alert('Time for a comfort break!');
-        }
-      }, 1000);
-      startBtn.textContent = 'Pause';
-    } else {
-      clearInterval(timerId);
-      timerId = null;
-      startBtn.textContent = 'Start';
-    }
-  });
-
-  resetBtn.addEventListener('click', () => {
-    clearInterval(timerId);
-    timerId = null;
-    timeLeft = 25 * 60;
-    updateDisplay();
-    startBtn.textContent = 'Start';
-  });
 }
 
 // Chart logic
