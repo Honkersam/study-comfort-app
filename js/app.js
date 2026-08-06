@@ -1,6 +1,42 @@
-// Navigation Screen Handlers
-// 7-day initial score data (last element = day before today)
+// Global persistent state sync via REST API
+const GLOBAL_STORE_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019fd7968f1503a4';
+
 let weekScores = [56, 24, 32, 41, 87, 65, 42];
+let saveDebounceTimer = null;
+
+async function loadGlobalScores() {
+  try {
+    const res = await fetch(GLOBAL_STORE_URL);
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data && Array.isArray(json.data.weekScores) && json.data.weekScores.length === 7) {
+        weekScores = json.data.weekScores;
+        renderPastDaysList();
+        updateWeekAverage();
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch global scores, using default/cached scores', err);
+  }
+}
+
+function saveGlobalScores() {
+  clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(async () => {
+    try {
+      await fetch(GLOBAL_STORE_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: "Study Comfort App State",
+          data: { weekScores: weekScores }
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to persist global scores', err);
+    }
+  }, 300);
+}
 
 function getPast7DaysNames() {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -65,6 +101,7 @@ function renderPastDaysList() {
       if (val > 100) val = 100;
       weekScores[idx] = val;
       updateWeekAverage();
+      saveGlobalScores();
     });
 
     row.appendChild(nameEl);
@@ -77,6 +114,7 @@ function renderPastDaysList() {
 document.addEventListener('DOMContentLoaded', () => {
   renderPastDaysList();
   updateWeekAverage();
+  loadGlobalScores();
 });
 
 function openDailyScoreScreen() {
