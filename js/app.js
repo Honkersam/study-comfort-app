@@ -18,11 +18,16 @@ function getPast7DaysNames() {
 
 let weekScores = [56, 24, 32, 41, 87, 65, 42]; // Default fallbacks
 let isUserEditing = false;
-let saveDebounceTimer = null;
+let isSaving = false;
 
 function getUserStorageKey(username) {
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
   return `study_comfort_scores_${slug}`;
+}
+
+function getCloudKey(username) {
+  const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
+  return `study_comfort_v2_${slug}`;
 }
 
 // User Switching
@@ -42,40 +47,33 @@ async function switchUser() {
   await loadGlobalScores();
 }
 
-// Cloud Persistence (LocalStorage + Global Counter API)
+// Cloud Persistence via JSONBin / MyJSON Storage API (Cross-device JSON Object Storage)
 async function loadGlobalScores() {
   const localKey = getUserStorageKey(currentUser);
   
-  // 1. Try local storage first for instant responsiveness
+  // 1. Load local cache first so UI renders immediately
   const cached = localStorage.getItem(localKey);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length === 7) {
-        weekScores = parsed;
+        weekScores = parsed.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
         updateWeekAverage();
       }
     } catch(e) {}
   }
 
-  // 2. Fetch from cloud for cross-device synchronization
-  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
+  // 2. Load from global multi-device API endpoint
+  const cloudKey = getCloudKey(currentUser);
   try {
-    const res = await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/`);
+    const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cloudKey)}`);
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.count) {
-        const str = data.count.toString().padStart(14, '0');
-        const remoteScores = [];
-        for (let i = 0; i < 7; i++) {
-          remoteScores.push(parseInt(str.substring(i * 2, i * 2 + 2), 10) || 0);
-        }
-        if (!isUserEditing) {
-          weekScores = remoteScores;
-          localStorage.setItem(localKey, JSON.stringify(weekScores));
-          renderPastDaysList();
-          updateWeekAverage();
-        }
+      const json = await res.json();
+      if (json && json.data && Array.isArray(json.data.scores) && json.data.scores.length === 7) {
+        weekScores = json.data.scores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+        localStorage.setItem(localKey, JSON.stringify(weekScores));
+        renderPastDaysList();
+        updateWeekAverage();
       }
     }
   } catch (err) {
@@ -85,13 +83,22 @@ async function loadGlobalScores() {
 
 async function saveGlobalScores() {
   const localKey = getUserStorageKey(currentUser);
+  const cloudKey = getCloudKey(currentUser);
+
+  // Clean values to valid 0-100 integers
+  weekScores = weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
   localStorage.setItem(localKey, JSON.stringify(weekScores));
 
-  const encodedCount = weekScores.map(s => Math.min(99, Math.max(0, parseInt(s) || 0)).toString().padStart(2, '0')).join('');
-  const slug = currentUser.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'user_1';
-
+  // Save full intact array directly as JSON to cloud object storage
   try {
-    await fetch(`https://api.counterapi.dev/v1/studycomfort_${slug}/week_data/set?count=${encodedCount}`);
+    await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cloudKey)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `Study Comfort User Data - ${currentUser}`,
+        data: { scores: weekScores }
+      })
+    });
   } catch (err) {
     console.warn('Cloud save error:', err);
   }
@@ -201,9 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderPastDaysList();
   updateWeekAverage();
   loadGlobalScores();
-
-  // Poll database every 5 seconds for real-time updates across devices
-  setInterval(loadGlobalScores, 5000);
 });
 
 // Send Payload
