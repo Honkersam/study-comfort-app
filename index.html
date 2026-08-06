@@ -22,6 +22,26 @@
       <h1>The Study Comfort App</h1>
     </header>
 
+    <!-- User Profile & Sign-in Bar -->
+    <div class="card" style="grid-column: 1 / -1; background: var(--card-inner); padding: 16px 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.4rem;">👤</span>
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Current Profile</div>
+            <div id="currentUserDisplay" style="font-size: 1.1rem; font-weight: 800; color: var(--text);">User 1</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center; flex: 1; max-width: 320px;">
+          <input type="text" id="usernameInput" placeholder="Enter name (e.g. User 1)" style="flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.12); font-size: 0.95rem; font-weight: 600; background: white;" />
+          <button onclick="switchUser()" style="padding: 10px 16px; background: var(--label-green); color: white; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; white-space: nowrap;">
+            Switch
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Top Gauge Score Cards (matching design mock) -->
     <div class="stats-grid">
       <div class="stat-card" id="dailyScoreWidget" onclick="openDailyScoreScreen()" style="cursor: pointer; transition: transform 0.15s ease;">

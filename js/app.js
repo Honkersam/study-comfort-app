@@ -1,20 +1,26 @@
-// Global persistent state sync via REST API
-const GLOBAL_STORE_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae019fd7968f1503a4';
-
+// Multi-user Global persistent state sync
+let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 let weekScores = [56, 24, 32, 41, 87, 65, 42];
 let saveDebounceTimer = null;
 let isUserEditing = false;
 
+function getUserStorageKey(username) {
+  // Normalize name for API key endpoint slug (e.g. "user-1", "adam")
+  const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-');
+  return `study_comfort_scores_${slug}`;
+}
+
 async function loadGlobalScores() {
-  // If user is actively typing in an input field, skip polling update to avoid overwriting their cursor/typing
   if (isUserEditing) return;
 
+  const userKey = getUserStorageKey(currentUser);
+  const url = `https://api.restful-api.dev/objects?id=${encodeURIComponent(userKey)}`;
+
   try {
-    const res = await fetch(GLOBAL_STORE_URL);
+    const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(userKey)}`);
     if (res.ok) {
       const json = await res.json();
       if (json && json.data && Array.isArray(json.data.weekScores) && json.data.weekScores.length === 7) {
-        // Only re-render if data actually changed
         const hasChanged = json.data.weekScores.some((score, i) => score !== weekScores[i]);
         if (hasChanged) {
           weekScores = json.data.weekScores;
@@ -24,26 +30,70 @@ async function loadGlobalScores() {
       }
     }
   } catch (err) {
-    console.warn('Could not fetch global scores, using default/cached scores', err);
+    console.warn('Could not fetch user global scores', err);
   }
 }
 
 function saveGlobalScores() {
   clearTimeout(saveDebounceTimer);
   saveDebounceTimer = setTimeout(async () => {
+    const userKey = getUserStorageKey(currentUser);
     try {
-      await fetch(GLOBAL_STORE_URL, {
+      await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(userKey)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: "Study Comfort App State",
+          name: `Study Comfort App State - ${currentUser}`,
           data: { weekScores: weekScores }
         })
       });
     } catch (err) {
-      console.warn('Failed to persist global scores', err);
+      console.warn('Failed to persist global user scores', err);
     }
   }, 300);
+}
+
+async function switchUser() {
+  const inputEl = document.getElementById('usernameInput');
+  const name = inputEl.value.trim();
+  if (!name) return;
+
+  currentUser = name;
+  localStorage.setItem('study_comfort_user', currentUser);
+  document.getElementById('currentUserDisplay').textContent = currentUser;
+  inputEl.value = '';
+
+  // Reset to default local view while loading profile from cloud
+  weekScores = [56, 24, 32, 41, 87, 65, 42];
+  renderPastDaysList();
+  updateWeekAverage();
+
+  // Load target user's scores or create if new profile
+  const userKey = getUserStorageKey(currentUser);
+  try {
+    const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(userKey)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data && Array.isArray(json.data.weekScores)) {
+        weekScores = json.data.weekScores;
+      }
+    } else {
+      // First time this user signed in, create cloud record
+      await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(userKey)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Study Comfort App State - ${currentUser}`,
+          data: { weekScores: weekScores }
+        })
+      });
+    }
+  } catch (e) {
+    console.warn('Error switching profile', e);
+  }
+
+  renderPastDaysList();
+  updateWeekAverage();
 }
 
 function getPast7DaysNames() {
@@ -123,11 +173,14 @@ function renderPastDaysList() {
 
 // Initialize Week Average calculation and day list on load
 document.addEventListener('DOMContentLoaded', () => {
+  const displayEl = document.getElementById('currentUserDisplay');
+  if (displayEl) displayEl.textContent = currentUser;
+
   renderPastDaysList();
   updateWeekAverage();
   loadGlobalScores();
 
-  // Poll database every 5 seconds for real-time updates across devices
+  // Poll database every 5 seconds for real-time updates across devices for active user
   setInterval(loadGlobalScores, 5000);
 });
 
