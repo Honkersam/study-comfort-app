@@ -1,5 +1,9 @@
 // Application State
 let dailyScore = 73;
+let sessionAvgDb = 0;
+let sessionPeakDb = 0;
+let lastRating = 0;
+
 let currentUser = localStorage.getItem('study_comfort_user') || 'User 1';
 
 // Default Past 7 Days relative to current day
@@ -53,6 +57,7 @@ function loadUserScores() {
         weekScores = parsed.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
         renderPastDaysList();
         updateWeekAverage();
+        updateChart();
         return;
       }
     } catch(e) {}
@@ -62,6 +67,7 @@ function loadUserScores() {
   weekScores = [...DEFAULT_SCORES];
   renderPastDaysList();
   updateWeekAverage();
+  updateChart();
 }
 
 function saveUserScores() {
@@ -69,6 +75,7 @@ function saveUserScores() {
   weekScores = weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
   localStorage.setItem(localKey, JSON.stringify(weekScores));
   updateWeekAverage();
+  updateChart();
 }
 
 function updateWeekAverage() {
@@ -154,6 +161,7 @@ function openWeekAvgScreen() {
 
   renderPastDaysList();
   updateWeekAverage();
+  updateChart();
 
   window.location.hash = 'week-avg';
 }
@@ -201,12 +209,278 @@ window.addEventListener('popstate', () => {
   }
 });
 
+// Microphone & Study Session Live Noise Level Monitor
+let micStream = null;
+let micContext = null;
+let micAnalyser = null;
+let micAnimId = null;
+let isMonitoringMic = false;
+
+// Session Audio Logs
+let noiseLogSamples = [];
+let livePeak = 0;
+
+async function toggleMicMonitor() {
+  const micBtn = document.getElementById('micBtn');
+  const dbVal = document.getElementById('dbVal');
+  const noiseLabel = document.getElementById('noiseLabel');
+  const meterBar = document.getElementById('meterBar');
+  const liveStatsContainer = document.getElementById('liveStatsContainer');
+  const postSessionCard = document.getElementById('postSessionCard');
+
+  if (!isMonitoringMic) {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = micContext.createMediaStreamSource(micStream);
+      micAnalyser = micContext.createAnalyser();
+      micAnalyser.fftSize = 256;
+      source.connect(micAnalyser);
+
+      isMonitoringMic = true;
+      noiseLogSamples = [];
+      livePeak = 0;
+
+      micBtn.textContent = 'End Session';
+      micBtn.className = 'btn secondary';
+      micBtn.style.borderColor = 'var(--danger)';
+      micBtn.style.color = 'var(--danger)';
+
+      if (liveStatsContainer) liveStatsContainer.style.display = 'block';
+      if (postSessionCard) postSessionCard.style.display = 'none';
+
+      const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+      function updateNoiseLevel() {
+        if (!isMonitoringMic) return;
+
+        micAnalyser.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i] * dataArray[i];
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+
+        let estimatedDb = Math.round(30 + (rms / 255) * 60);
+        if (estimatedDb < 30) estimatedDb = 30;
+
+        // Log sample periodically
+        noiseLogSamples.push(estimatedDb);
+        if (estimatedDb > livePeak) {
+          livePeak = estimatedDb; // Track highest peak reading
+        }
+
+        dbVal.textContent = `${estimatedDb} dB`;
+        
+        let percent = Math.min(100, Math.max(0, ((estimatedDb - 30) / 60) * 100));
+        meterBar.style.width = `${percent}%`;
+
+        // Update real-time session stats
+        const currentSum = noiseLogSamples.reduce((a, b) => a + b, 0);
+        const currentAvg = Math.round(currentSum / noiseLogSamples.length);
+        document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
+        document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
+
+        if (estimatedDb < 50) {
+          dbVal.style.color = 'var(--success)';
+          meterBar.style.backgroundColor = 'var(--success)';
+          noiseLabel.textContent = 'Quiet Study Session 🤫';
+          noiseLabel.style.color = 'var(--success)';
+        } else if (estimatedDb < 70) {
+          dbVal.style.color = 'var(--warning)';
+          meterBar.style.backgroundColor = 'var(--warning)';
+          noiseLabel.textContent = 'Moderate Ambient Noise ☕';
+          noiseLabel.style.color = 'var(--warning)';
+        } else {
+          dbVal.style.color = 'var(--danger)';
+          meterBar.style.backgroundColor = 'var(--danger)';
+          noiseLabel.textContent = 'High Noise Spikes Detected 🔊';
+          noiseLabel.style.color = 'var(--danger)';
+        }
+
+        micAnimId = requestAnimationFrame(updateNoiseLevel);
+      }
+
+      updateNoiseLevel();
+
+    } catch (err) {
+      console.error("Microphone error:", err);
+      alert(`Microphone Error: ${err.message}`);
+      return;
+    }
+  } else {
+    stopMicMonitor();
+  }
+}
+
+function stopMicMonitor() {
+  isMonitoringMic = false;
+  if (micAnimId) cancelAnimationFrame(micAnimId);
+  if (micStream) micStream.getTracks().forEach(track => track.stop());
+  if (micContext) micContext.close();
+
+  // Finalize Session Noise Stats
+  if (noiseLogSamples.length > 0) {
+    const total = noiseLogSamples.reduce((a, b) => a + b, 0);
+    sessionAvgDb = Math.round(total / noiseLogSamples.length);
+    sessionPeakDb = livePeak;
+  } else {
+    sessionAvgDb = 42;
+    sessionPeakDb = 58;
+  }
+
+  const micBtn = document.getElementById('micBtn');
+  micBtn.textContent = 'Start Session';
+  micBtn.className = 'btn primary';
+  micBtn.style.borderColor = '';
+  micBtn.style.color = '';
+
+  document.getElementById('dbVal').textContent = `${sessionAvgDb} dB (Session Avg)`;
+  document.getElementById('dbVal').style.color = 'var(--success)';
+  document.getElementById('meterBar').style.width = '0%';
+  document.getElementById('noiseLabel').textContent = `Peak Noise: ${sessionPeakDb} dB`;
+  document.getElementById('noiseLabel').style.color = 'var(--text-muted)';
+
+  // Prompt user for session rating
+  const postSessionCard = document.getElementById('postSessionCard');
+  if (postSessionCard) postSessionCard.style.display = 'block';
+}
+
+function submitSessionRating(rating) {
+  lastRating = rating;
+  calculateDailyScore(sessionAvgDb, sessionPeakDb, rating);
+  
+  const postSessionCard = document.getElementById('postSessionCard');
+  if (postSessionCard) postSessionCard.style.display = 'none';
+
+  // Highlight selected button in daily detail page
+  document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
+    if (idx + 1 === rating) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  openDailyScoreScreen();
+}
+
+// Calculate Daily Score Formula
+// Equation:
+// Daily Score = (User Rating Score [0-100] * 50%) + (Average Noise Score [0-100] * 35%) + (Peak Penalty Score [0-100] * 15%)
+function calculateDailyScore(avgDb, peakDb, rating) {
+  // 1. User Rating Component (1-5 scaled to 20-100)
+  const ratingScore = rating * 20;
+
+  // 2. Average Noise Component (30 dB = 100 pts, 90 dB = 0 pts)
+  let noiseScore = 100 - ((avgDb - 30) / 60) * 100;
+  noiseScore = Math.min(100, Math.max(0, noiseScore));
+
+  // 3. Peak Noise Penalty Component (30 dB = 100 pts, 90 dB = 0 pts)
+  let peakScore = 100 - ((peakDb - 30) / 60) * 100;
+  peakScore = Math.min(100, Math.max(0, peakScore));
+
+  // Weighted Total
+  const finalScore = Math.round((ratingScore * 0.50) + (noiseScore * 0.35) + (peakScore * 0.15));
+  dailyScore = Math.min(100, Math.max(0, finalScore));
+
+  // Save today's score into current week's last slot (Today)
+  weekScores[6] = dailyScore;
+  saveUserScores();
+
+  // Update UI Elements
+  updateDailyScoreUI(avgDb, peakDb, rating);
+}
+
+function updateDailyScoreUI(avgDb, peakDb, rating) {
+  const homeVal = document.getElementById('homeDailyVal');
+  const detailVal = document.getElementById('detailDailyScoreVal');
+  const homeArc = document.getElementById('homeDailyGaugeArc');
+
+  if (homeVal) homeVal.textContent = dailyScore;
+  if (detailVal) detailVal.textContent = dailyScore;
+
+  if (homeArc) {
+    const offset = 141.37 * (1 - (dailyScore / 100));
+    homeArc.setAttribute('stroke-dashoffset', offset);
+  }
+
+  // Update Summary Panel in Daily Score Detail
+  const summaryAvg = document.getElementById('summaryAvgDb');
+  const summaryPeak = document.getElementById('summaryPeakDb');
+  const summaryRating = document.getElementById('summaryRating');
+
+  if (summaryAvg) summaryAvg.textContent = `${avgDb || sessionAvgDb || '--'} dB`;
+  if (summaryPeak) summaryPeak.textContent = `${peakDb || sessionPeakDb || '--'} dB`;
+  if (summaryRating) summaryRating.textContent = `${rating || lastRating || '--'} / 5`;
+}
+
+function logComfort(rating) {
+  submitSessionRating(rating);
+}
+
+// Chart Logic (Weekly Trends on Week Average Page)
+let comfortChart = null;
+
+function initChart() {
+  const chartEl = document.getElementById('comfortChart');
+  if (!chartEl) return;
+
+  const ctx = chartEl.getContext('2d');
+  const dayNames = getPast7DaysNames();
+
+  comfortChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dayNames,
+      datasets: [{
+        label: 'Daily Score (0-100)',
+        data: weekScores,
+        borderColor: '#d9622b',
+        backgroundColor: 'rgba(217, 98, 43, 0.15)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#d9622b',
+        pointRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { stepSize: 20, color: '#5d6d7e' },
+          grid: { color: 'rgba(0, 0, 0, 0.08)' }
+        },
+        x: {
+          ticks: { color: '#5d6d7e', font: { weight: 'bold' } },
+          grid: { display: false }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
+
+function updateChart() {
+  if (comfortChart) {
+    comfortChart.data.labels = getPast7DaysNames();
+    comfortChart.data.datasets[0].data = [...weekScores];
+    comfortChart.update();
+  }
+}
+
 // Initialize on load
 document.addEventListener('DOMContentLoaded', () => {
   const displayEl = document.getElementById('currentUserDisplay');
   if (displayEl) displayEl.textContent = currentUser;
 
-  // Restore screen state based on hash if present
   if (window.location.hash === '#daily-score') {
     openDailyScoreScreen();
   } else if (window.location.hash === '#week-avg') {
@@ -219,6 +493,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderPastDaysList();
   loadUserScores();
+  initChart();
+  updateDailyScoreUI(42, 58, 4);
 });
 
 // Send Payload
@@ -276,161 +552,6 @@ async function scheduleNotification() {
   } else {
     statusDiv.textContent = 'Browser does not support notifications';
   }
-}
-
-// Microphone Live Noise Level Monitor
-let micStream = null;
-let micContext = null;
-let micAnalyser = null;
-let micAnimId = null;
-let isMonitoringMic = false;
-
-async function toggleMicMonitor() {
-  const micBtn = document.getElementById('micBtn');
-  const dbVal = document.getElementById('dbVal');
-  const noiseLabel = document.getElementById('noiseLabel');
-  const meterBar = document.getElementById('meterBar');
-
-  if (!isMonitoringMic) {
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = micContext.createMediaStreamSource(micStream);
-      micAnalyser = micContext.createAnalyser();
-      micAnalyser.fftSize = 256;
-      source.connect(micAnalyser);
-
-      isMonitoringMic = true;
-      micBtn.textContent = 'Stop Noise Monitor';
-      micBtn.style.borderColor = 'var(--danger)';
-      micBtn.style.color = 'var(--danger)';
-
-      const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
-
-      function updateNoiseLevel() {
-        if (!isMonitoringMic) return;
-
-        micAnalyser.getByteFrequencyData(dataArray);
-
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i] * dataArray[i];
-        }
-        const rms = Math.sqrt(sum / dataArray.length);
-
-        let estimatedDb = Math.round(30 + (rms / 255) * 60);
-        if (estimatedDb < 30) estimatedDb = 30;
-
-        dbVal.textContent = `${estimatedDb} dB`;
-        
-        let percent = Math.min(100, Math.max(0, ((estimatedDb - 30) / 60) * 100));
-        meterBar.style.width = `${percent}%`;
-
-        if (estimatedDb < 50) {
-          dbVal.style.color = 'var(--success)';
-          meterBar.style.backgroundColor = 'var(--success)';
-          noiseLabel.textContent = 'Quiet Study Zone 🤫';
-          noiseLabel.style.color = 'var(--success)';
-        } else if (estimatedDb < 70) {
-          dbVal.style.color = 'var(--warning)';
-          meterBar.style.backgroundColor = 'var(--warning)';
-          noiseLabel.textContent = 'Moderate Ambient Sound ☕';
-          noiseLabel.style.color = 'var(--warning)';
-        } else {
-          dbVal.style.color = 'var(--danger)';
-          meterBar.style.backgroundColor = 'var(--danger)';
-          noiseLabel.textContent = 'Loud / Distracting Noise 🔊';
-          noiseLabel.style.color = 'var(--danger)';
-        }
-
-        micAnimId = requestAnimationFrame(updateNoiseLevel);
-      }
-
-      updateNoiseLevel();
-
-    } catch (err) {
-      console.error("Microphone error:", err);
-      alert(`Microphone Error: ${err.message}`);
-      return;
-    }
-  } else {
-    stopMicMonitor();
-  }
-}
-
-function stopMicMonitor() {
-  isMonitoringMic = false;
-  if (micAnimId) cancelAnimationFrame(micAnimId);
-  if (micStream) micStream.getTracks().forEach(track => track.stop());
-  if (micContext) micContext.close();
-
-  const micBtn = document.getElementById('micBtn');
-  micBtn.textContent = 'Start Live Noise Monitor';
-  micBtn.style.borderColor = 'var(--border)';
-  micBtn.style.color = 'var(--text-muted)';
-
-  document.getElementById('dbVal').textContent = '-- dB';
-  document.getElementById('dbVal').style.color = 'var(--success)';
-  document.getElementById('meterBar').style.width = '0%';
-  document.getElementById('noiseLabel').textContent = 'Tap start to monitor noise';
-  document.getElementById('noiseLabel').style.color = 'var(--text-muted)';
-}
-
-// Chart logic
-const chartEl = document.getElementById('comfortChart');
-if (chartEl) {
-  const ctx = chartEl.getContext('2d');
-  const initialData = [3, 4, 2, 5, 4, 3, 4];
-
-  const comfortChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-      datasets: [{
-        label: 'Comfort (1-5)',
-        data: initialData,
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99, 102, 241, 0.15)',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: '#818cf8',
-        pointRadius: 5
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          min: 1,
-          max: 5,
-          ticks: { stepSize: 1, color: '#94a3b8' },
-          grid: { color: '#334155' }
-        },
-        x: {
-          ticks: { color: '#94a3b8' },
-          grid: { display: false }
-        }
-      },
-      plugins: {
-        legend: { display: false }
-      }
-    }
-  });
-
-  window.logComfort = function(score) {
-    comfortChart.data.datasets[0].data[6] = score;
-    comfortChart.update();
-    
-    document.querySelectorAll('.rating-btn').forEach((btn, idx) => {
-      if (idx + 1 === score) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-  };
 }
 
 if ('serviceWorker' in navigator) {

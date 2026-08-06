@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=9" />
+  <link rel="stylesheet" href="css/styles.css?v=10" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -59,9 +59,9 @@
         <div class="gauge-container">
           <svg class="gauge-svg" viewBox="0 0 100 55">
             <path class="gauge-bg" d="M 10 50 A 40 40 0 0 1 90 50" />
-            <path class="gauge-fill" d="M 10 50 A 40 40 0 0 1 90 50" stroke-dasharray="91, 126" />
+            <path id="homeDailyGaugeArc" class="gauge-fill" d="M 10 50 A 40 40 0 0 1 90 50" stroke-dasharray="126" stroke-dashoffset="30" />
           </svg>
-          <div class="gauge-value">73</div>
+          <div id="homeDailyVal" class="gauge-value">73</div>
         </div>
       </div>
 
@@ -77,21 +77,52 @@
       </div>
     </div>
 
-    <!-- Live Noise Monitor Card -->
+    <!-- Live Noise Monitor Card / Study Session -->
     <div class="card" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="icon">🎙️</span>
-        <h2>Live Noise Monitor</h2>
+        <h2>Study Session Noise Monitor</h2>
       </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Measures live ambient sound level from your microphone.</p>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Start a study session to log ambient noise, track peak audio, and calculate your daily comfort score.</p>
+      
       <div style="text-align: center; margin-bottom: 12px;">
         <div id="dbVal" style="font-size: 2.2rem; font-family: 'Fredoka One', cursive; color: var(--success);">-- dB</div>
-        <div id="noiseLabel" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-top: 4px;">Tap start to monitor noise</div>
+        <div id="noiseLabel" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-top: 4px;">Tap Start Session to begin monitoring</div>
       </div>
+      
       <div style="width: 100%; height: 10px; background: rgba(0,0,0,0.08); border-radius: 5px; overflow: hidden; margin-bottom: 14px;">
         <div id="meterBar" style="width: 0%; height: 100%; background: var(--success); transition: width 0.1s ease, background-color 0.2s ease;"></div>
       </div>
-      <button id="micBtn" class="btn secondary" onclick="toggleMicMonitor()">Start Live Noise Monitor</button>
+
+      <!-- Live Session Real-time Stats -->
+      <div id="liveStatsContainer" style="display: none; background: rgba(255,255,255,0.4); padding: 12px; border-radius: 12px; margin-bottom: 14px; text-align: center;">
+        <div style="display: flex; justify-content: space-around; gap: 8px;">
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">CURRENT AVG</div>
+            <div id="liveAvgDb" style="font-size: 1.1rem; font-weight: 800; color: var(--text);">-- dB</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">PEAK NOISE</div>
+            <div id="livePeakDb" style="font-size: 1.1rem; font-weight: 800; color: var(--danger);">-- dB</div>
+          </div>
+        </div>
+      </div>
+
+      <button id="micBtn" class="btn primary" onclick="toggleMicMonitor()">Start Session</button>
+
+      <!-- Post-Session Rating Prompt -->
+      <div id="postSessionCard" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
+        <div style="font-size: 0.95rem; font-weight: 800; color: var(--text); margin-bottom: 8px; text-align: center;">
+          Session Ended! How comfortable was your session?
+        </div>
+        <div class="rating-grid">
+          <button class="rating-btn" onclick="submitSessionRating(1)">1 😣</button>
+          <button class="rating-btn" onclick="submitSessionRating(2)">2 🙁</button>
+          <button class="rating-btn" onclick="submitSessionRating(3)">3 😐</button>
+          <button class="rating-btn" onclick="submitSessionRating(4)">4 🙂</button>
+          <button class="rating-btn" onclick="submitSessionRating(5)">5 😊</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -104,38 +135,49 @@
         <div style="width: 40px;"></div>
       </div>
 
-      <div style="text-align: center; padding: 20px 0 10px 0;">
-        <div style="font-size: 1rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">TODAY'S SCORE</div>
-        <div style="font-family: 'Fredoka One', cursive; font-size: 4rem; color: #d9622b;">73</div>
-        <div style="display: inline-block; background: rgba(72, 119, 66, 0.15); color: var(--label-green); padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; margin-top: 6px;">
+      <div style="text-align: center; padding: 10px 0;">
+        <div style="font-size: 0.9rem; color: var(--text-muted); font-weight: 700; margin-bottom: 4px;">TODAY'S SCORE</div>
+        <div id="detailDailyScoreVal" style="font-family: 'Fredoka One', cursive; font-size: 4rem; color: #d9622b;">73</div>
+        <div id="detailComfortBadge" style="display: inline-block; background: rgba(72, 119, 66, 0.15); color: var(--label-green); padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.9rem; margin-top: 4px;">
           Optimal Comfort
         </div>
       </div>
 
-      <!-- Log Comfort Level Card -->
-      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
+      <!-- Session Noise Stats Summary in Daily Score -->
+      <div style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.4); border-radius: 16px;">
+        <div class="card-header" style="margin-bottom: 8px;">
+          <span class="icon">📊</span>
+          <h2>Latest Session Noise Data</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; margin-top: 12px;">
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">AVG NOISE</div>
+            <div id="summaryAvgDb" style="font-size: 1.2rem; font-weight: 800; color: var(--text);">-- dB</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">PEAK NOISE</div>
+            <div id="summaryPeakDb" style="font-size: 1.2rem; font-weight: 800; color: var(--danger);">-- dB</div>
+          </div>
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted);">USER RATING</div>
+            <div id="summaryRating" style="font-size: 1.2rem; font-weight: 800; color: var(--label-green);">-- / 5</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log Comfort Level Manual Override Card -->
+      <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
         <div class="card-header" style="margin-bottom: 8px;">
           <span class="icon">✨</span>
-          <h2>Log Comfort Rating</h2>
+          <h2>Quick Comfort Rating Log</h2>
         </div>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Rate your current study environment comfort (1-5):</p>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;">Rate your overall environment to manually adjust today's score:</p>
         <div class="rating-grid">
           <button class="rating-btn" onclick="logComfort(1)">1 😣</button>
           <button class="rating-btn" onclick="logComfort(2)">2 🙁</button>
           <button class="rating-btn" onclick="logComfort(3)">3 😐</button>
           <button class="rating-btn" onclick="logComfort(4)">4 🙂</button>
           <button class="rating-btn" onclick="logComfort(5)">5 😊</button>
-        </div>
-      </div>
-
-      <!-- Weekly Trends Graph -->
-      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
-        <div class="card-header" style="margin-bottom: 12px;">
-          <span class="icon">📊</span>
-          <h2>Weekly Comfort Trends</h2>
-        </div>
-        <div class="chart-container" style="height: 220px; width: 100%;">
-          <canvas id="comfortChart"></canvas>
         </div>
       </div>
     </div>
@@ -161,8 +203,20 @@
         <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); margin-top: 4px;">7-DAY AVERAGE</div>
       </div>
 
+      <!-- Past Days Editable Score List -->
       <div id="pastDaysList" style="margin-top: 10px;">
         <!-- Dynamically rendered past 7 days -->
+      </div>
+
+      <!-- Weekly Trends Graph (Uses 7-Day Values) -->
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.08);">
+        <div class="card-header" style="margin-bottom: 12px;">
+          <span class="icon">📈</span>
+          <h2>Weekly Comfort Trends</h2>
+        </div>
+        <div class="chart-container" style="height: 220px; width: 100%;">
+          <canvas id="comfortChart"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -177,18 +231,18 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 16px;">
-        <!-- Break Notifications Card inside Settings -->
+        <!-- Break Notifications Card -->
         <div style="background: var(--card-inner); padding: 16px; border-radius: 16px;">
           <div class="card-header">
             <span class="icon">🔔</span>
             <h2>Break Notifications</h2>
           </div>
-          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Schedule a 3-second break check-in notification.</p>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Schedule an instant break check-in notification.</p>
           <button class="btn secondary" onclick="scheduleNotification()">Trigger Notification</button>
           <div id="notifStatus" class="status-msg"></div>
         </div>
 
-        <!-- Arduino Controller Card inside Settings -->
+        <!-- Arduino Controller Card -->
         <div style="background: var(--card-inner); padding: 16px; border-radius: 16px;">
           <div class="card-header">
             <span class="icon">🔌</span>
@@ -218,6 +272,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=9"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>
