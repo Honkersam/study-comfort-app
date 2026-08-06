@@ -3,16 +3,24 @@ const GLOBAL_STORE_URL = 'https://api.restful-api.dev/objects/ff8081819f7e10ae01
 
 let weekScores = [56, 24, 32, 41, 87, 65, 42];
 let saveDebounceTimer = null;
+let isUserEditing = false;
 
 async function loadGlobalScores() {
+  // If user is actively typing in an input field, skip polling update to avoid overwriting their cursor/typing
+  if (isUserEditing) return;
+
   try {
     const res = await fetch(GLOBAL_STORE_URL);
     if (res.ok) {
       const json = await res.json();
       if (json && json.data && Array.isArray(json.data.weekScores) && json.data.weekScores.length === 7) {
-        weekScores = json.data.weekScores;
-        renderPastDaysList();
-        updateWeekAverage();
+        // Only re-render if data actually changed
+        const hasChanged = json.data.weekScores.some((score, i) => score !== weekScores[i]);
+        if (hasChanged) {
+          weekScores = json.data.weekScores;
+          renderPastDaysList();
+          updateWeekAverage();
+        }
       }
     }
   } catch (err) {
@@ -94,6 +102,9 @@ function renderPastDaysList() {
     inputEl.className = 'day-score-input';
     inputEl.value = weekScores[idx];
 
+    inputEl.addEventListener('focus', () => { isUserEditing = true; });
+    inputEl.addEventListener('blur', () => { isUserEditing = false; });
+
     inputEl.addEventListener('input', (e) => {
       let val = parseInt(e.target.value, 10);
       if (isNaN(val)) val = 0;
@@ -115,6 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderPastDaysList();
   updateWeekAverage();
   loadGlobalScores();
+
+  // Poll database every 5 seconds for real-time updates across devices
+  setInterval(loadGlobalScores, 5000);
 });
 
 function openDailyScoreScreen() {
