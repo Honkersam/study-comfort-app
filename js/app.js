@@ -1,3 +1,27 @@
+// Navigation Screen Handlers
+function openDailyScoreScreen() {
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('dailyScoreScreen').style.display = 'flex';
+  window.location.hash = 'daily-score';
+}
+
+function closeDailyScoreScreen() {
+  document.getElementById('dailyScoreScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'flex';
+  if (window.location.hash === '#daily-score') {
+    history.pushState("", document.title, window.location.pathname + window.location.search);
+  }
+}
+
+// Handle Browser Back Button
+window.addEventListener('popstate', () => {
+  if (window.location.hash !== '#daily-score') {
+    closeDailyScoreScreen();
+  } else {
+    openDailyScoreScreen();
+  }
+});
+
 // Send Score and NotifExists JSON to Local Server
 function sendPayload() {
   const score = parseInt(document.getElementById('scoreInput').value, 10) || 0;

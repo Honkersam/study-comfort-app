@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" href="icon-192.png" />
   <meta name="theme-color" content="#ffe4c9" />
   
-  <link rel="stylesheet" href="css/styles.css?v=3" />
+  <link rel="stylesheet" href="css/styles.css?v=4" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Leaflet CSS & JS for Interactive Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -16,7 +16,7 @@
 </head>
 <body>
 
-  <div class="container">
+  <div class="container" id="mainScreen">
     <header class="app-header">
       <img src="logo.png" alt="Study Comfort App Logo" />
       <h1>The Study Comfort App</h1>
@@ -24,7 +24,7 @@
 
     <!-- Top Gauge Score Cards (matching design mock) -->
     <div class="stats-grid">
-      <div class="stat-card">
+      <div class="stat-card" id="dailyScoreWidget" onclick="openDailyScoreScreen()" style="cursor: pointer; transition: transform 0.15s ease;">
         <div class="stat-label">Daily Score:</div>
         <div class="gauge-container">
           <svg class="gauge-svg" viewBox="0 0 120 70">
@@ -161,6 +161,26 @@
       <div class="card-title">📊 Weekly Comfort Score</div>
       <div class="chart-container">
         <canvas id="comfortChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Daily Score Screen -->
+  <div class="container" id="dailyScoreScreen" style="display: none; min-height: 100vh;">
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 20px;">
+      <button onclick="closeDailyScoreScreen()" style="width: 44px; height: 44px; border-radius: 50%; background: #487742; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 1.2rem; font-weight: bold; padding: 0;">
+        ➔
+      </button>
+      <h2 style="font-size: 1.6rem; font-weight: 800; color: #1a1a1a; margin: 0;">Daily Score</h2>
+    </div>
+
+    <div class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 20px;">
+      <div class="gauge-container" style="width: 240px; height: 140px;">
+        <svg class="gauge-svg" viewBox="0 0 120 70" style="width: 240px; height: 140px;">
+          <path class="gauge-bg" d="M 15 60 A 45 45 0 0 1 105 60" style="stroke-width: 10;" />
+          <path class="gauge-fill" d="M 15 60 A 45 45 0 0 1 105 60" stroke-dasharray="141.37" stroke-dashoffset="38" style="stroke-width: 10;" />
+        </svg>
+        <div class="gauge-value" style="font-size: 4.2rem; bottom: -5px;">73</div>
       </div>
     </div>
   </div>
