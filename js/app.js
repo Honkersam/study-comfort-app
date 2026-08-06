@@ -234,9 +234,9 @@ let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Automatic Backend Payload Sender Logic
-let currentZoneColor = null;
-let zoneStartTime = null;
+// Automatic Backend Payload Sender Logic (Every 5 seconds)
+let fiveSecWindowSamples = [];
+let payloadIntervalId = null;
 let lastSentColor = null;
 
 function getColorZone(db) {
@@ -253,18 +253,26 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
-function sendAutomatedBackendPayload(currentDb, activeColor) {
+function sendAutomated5SecPayload() {
+  if (!isMonitoringMic || fiveSecWindowSamples.length === 0) return;
+
+  // Calculate average decibels over the last 5 seconds
+  const sum = fiveSecWindowSamples.reduce((a, b) => a + b, 0);
+  const avg5SecDb = Math.round(sum / fiveSecWindowSamples.length);
+  fiveSecWindowSamples = []; // Clear buffer for next 5s window
+
+  const activeColor = getColorZone(avg5SecDb);
   const notifExists = (lastSentColor !== null && lastSentColor !== activeColor);
   const recentScore = getMostRecentDailyScore();
 
   const payload = {
     score: recentScore,
-    decible: currentDb,
+    decible: avg5SecDb,
     colour: activeColor,
     notifExists: notifExists
   };
 
-  console.log("Sending Automated Backend Payload:", payload);
+  console.log("Sending 5-Sec Window Payload:", payload);
 
   fetch('https://localhost:3001/send', {
     method: 'POST',
@@ -304,12 +312,13 @@ async function toggleMicMonitor() {
 
       isMonitoringMic = true;
       timelineSamples = [];
+      fiveSecWindowSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
-
-      currentZoneColor = null;
-      zoneStartTime = null;
       lastSentColor = null;
+
+      // Start 5-second interval timer for backend POSTs
+      payloadIntervalId = setInterval(sendAutomated5SecPayload, 5000);
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -338,6 +347,8 @@ async function toggleMicMonitor() {
         if (rawDb > 95) rawDb = 95;
 
         sessionSumDb += rawDb;
+        fiveSecWindowSamples.push(rawDb); // Accumulate samples for 5s averaging
+
         if (rawDb > livePeak) {
           livePeak = rawDb;
         }
@@ -355,21 +366,6 @@ async function toggleMicMonitor() {
         const currentAvg = Math.round(sessionSumDb / Math.max(1, frameCounter));
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
-
-        // Determine current noise color zone ('green', 'yellow', 'red')
-        const activeZone = getColorZone(rawDb);
-        const now = Date.now();
-
-        if (activeZone !== currentZoneColor) {
-          currentZoneColor = activeZone;
-          zoneStartTime = now;
-        } else {
-          // If level stays in the same color zone for 10 seconds (10,000 ms)
-          if (zoneStartTime && (now - zoneStartTime >= 10000)) {
-            sendAutomatedBackendPayload(rawDb, activeZone);
-            zoneStartTime = now; // Reset timer for next 10s interval
-          }
-        }
 
         if (rawDb < 50) {
           dbVal.style.color = 'var(--success)';
@@ -430,11 +426,9 @@ function resampleTimeline(rawSamples, targetSize) {
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
+  if (payloadIntervalId) clearInterval(payloadIntervalId);
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
-
-  currentZoneColor = null;
-  zoneStartTime = null;
 
   let sessionWaveform = resampleTimeline(timelineSamples, MAX_TIMELINE_POINTS);
 
