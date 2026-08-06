@@ -228,12 +228,14 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Dynamic Timeline Buffer (Stores chronological readings over session time)
-const MAX_TIMELINE_POINTS = 60; // Max 60 bars on graph
+// Time-Series Timeline Buffer
+const MAX_TIMELINE_POINTS = 60;
 let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
-let sampleIntervalCounter = 0;
+
+// Exponential Moving Average (EMA) smoother for real-time display UI
+let smoothedDb = 32;
 
 async function toggleMicMonitor() {
   const micBtn = document.getElementById('micBtn');
@@ -256,7 +258,7 @@ async function toggleMicMonitor() {
       timelineSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
-      sampleIntervalCounter = 0;
+      smoothedDb = 32;
 
       micBtn.textContent = 'End Session';
       micBtn.className = 'btn secondary';
@@ -267,52 +269,57 @@ async function toggleMicMonitor() {
       if (postSessionCard) postSessionCard.style.display = 'none';
 
       const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+      let frameCounter = 0;
 
       function updateNoiseLevel() {
         if (!isMonitoringMic) return;
 
         micAnalyser.getByteFrequencyData(dataArray);
 
-        // Responsive RMS decibel calculation
+        // Standard SPL Decibel Calibration (30 dB ambient room floor, ~60-65 dB normal speech, ~80+ dB loud noise)
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sum += dataArray[i] * dataArray[i];
         }
         const rms = Math.sqrt(sum / dataArray.length);
 
-        // Map audio signal dynamically from 30 dB to 90 dB
-        let estimatedDb = Math.round(30 + (rms / 128) * 60);
-        if (estimatedDb < 30) estimatedDb = 30;
+        // Calibrated logarithmic-like SPL mapping
+        let rawDb = Math.round(30 + (rms / 200) * 55);
+        if (rawDb < 30) rawDb = 30;
+        if (rawDb > 95) rawDb = 95;
 
-        sessionSumDb += estimatedDb;
-        if (estimatedDb > livePeak) {
-          livePeak = estimatedDb;
+        // Exponential Moving Average (EMA) smoothing for stable UI display (reduces jumpiness)
+        smoothedDb = Math.round((0.15 * rawDb) + (0.85 * smoothedDb));
+
+        sessionSumDb += smoothedDb;
+        if (smoothedDb > livePeak) {
+          livePeak = smoothedDb;
         }
 
-        // Sample into time-series array roughly 3 times per second (every ~20 animation frames)
-        sampleIntervalCounter++;
-        if (sampleIntervalCounter % 20 === 0) {
-          timelineSamples.push(estimatedDb);
+        // Sample into chronological time-series every 15 animation frames (~4 times per second)
+        frameCounter++;
+        if (frameCounter % 15 === 0) {
+          timelineSamples.push(smoothedDb);
         }
 
-        dbVal.textContent = `${estimatedDb} dB`;
+        dbVal.textContent = `${smoothedDb} dB`;
         
-        let percent = Math.min(100, Math.max(0, ((estimatedDb - 30) / 60) * 100));
+        let percent = Math.min(100, Math.max(0, ((smoothedDb - 30) / 60) * 100));
         meterBar.style.width = `${percent}%`;
 
-        const currentAvg = Math.round(sessionSumDb / Math.max(1, sampleIntervalCounter));
+        const currentAvg = Math.round(sessionSumDb / Math.max(1, frameCounter));
         document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
         document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
 
-        if (estimatedDb < 50) {
+        if (smoothedDb < 50) {
           dbVal.style.color = 'var(--success)';
           meterBar.style.backgroundColor = 'var(--success)';
           noiseLabel.textContent = 'Quiet Study Session 🤫';
           noiseLabel.style.color = 'var(--success)';
-        } else if (estimatedDb < 70) {
+        } else if (smoothedDb < 68) {
           dbVal.style.color = 'var(--warning)';
           meterBar.style.backgroundColor = 'var(--warning)';
-          noiseLabel.textContent = 'Moderate Ambient Noise ☕';
+          noiseLabel.textContent = 'Normal Conversation / Speaking 🗣️';
           noiseLabel.style.color = 'var(--warning)';
         } else {
           dbVal.style.color = 'var(--danger)';
@@ -336,10 +343,10 @@ async function toggleMicMonitor() {
   }
 }
 
-// Downsample long time series to exactly MAX_TIMELINE_POINTS without losing chronological time sequence
+// Downsample time-series to targetSize without losing chronological sequence
 function resampleTimeline(rawSamples, targetSize) {
   if (!rawSamples || rawSamples.length === 0) {
-    return [38, 52, 44, 38, 72, 54, 60, 42, 65, 48, 42, 62, 45, 51, 38, 53, 46, 68, 40, 44, 70, 50, 42, 56, 52, 45, 62, 46, 48, 51, 42, 58, 38, 50, 44, 65, 46, 48, 42, 40];
+    return [35, 42, 38, 35, 58, 44, 48, 38, 52, 42, 38, 50, 41, 45, 36, 42, 39, 54, 38, 40, 56, 44, 38, 45, 42, 38, 52, 40, 42, 44, 38, 48, 36, 42, 39, 52, 40, 42, 38, 35];
   }
   if (rawSamples.length <= targetSize) {
     return rawSamples;
@@ -353,8 +360,9 @@ function resampleTimeline(rawSamples, targetSize) {
     const end = Math.floor((i + 1) * chunkSize);
     const chunk = rawSamples.slice(start, end);
     if (chunk.length > 0) {
-      // Pick max reading in time chunk to retain spikes
-      result.push(Math.max(...chunk));
+      // Pick representative average/peak in time slice
+      const avg = Math.round(chunk.reduce((a, b) => a + b, 0) / chunk.length);
+      result.push(avg);
     }
   }
   return result;
@@ -373,8 +381,8 @@ function stopMicMonitor() {
     sessionAvgDb = Math.round(total / timelineSamples.length);
     sessionPeakDb = livePeak;
   } else {
-    sessionAvgDb = 45;
-    sessionPeakDb = 72;
+    sessionAvgDb = 42;
+    sessionPeakDb = 58;
   }
 
   const micBtn = document.getElementById('micBtn');
@@ -560,12 +568,12 @@ function renderWaveformChart(customWaveform) {
     data = todaySessions[todaySessions.length - 1].waveform;
   }
   if (!data || !data.length) {
-    data = [38, 52, 44, 38, 72, 54, 60, 42, 65, 48, 42, 62, 45, 51, 38, 53, 46, 68, 40, 44, 70, 50, 42, 56, 52, 45, 62, 46, 48, 51, 42, 58, 38, 50, 44, 65, 46, 48, 42, 40];
+    data = [35, 42, 38, 35, 58, 44, 48, 38, 52, 42, 38, 50, 41, 45, 36, 42, 39, 54, 38, 40, 56, 44, 38, 45, 42, 38, 52, 40, 42, 44, 38, 48, 36, 42, 39, 52, 40, 42, 38, 35];
   }
 
   const barColors = data.map(db => {
     if (db < 50) return '#487742';
-    if (db < 70) return '#f39c12';
+    if (db < 68) return '#f39c12';
     return '#e74c3c';
   });
 
