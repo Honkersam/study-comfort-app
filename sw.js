@@ -1,34 +1,22 @@
-const CACHE_NAME = 'study-comfort-v2';
+const CACHE_NAME = 'uw-envirosync-v1';
+const ASSETS = [
+  './',
+  './index.html',
+  './css/styles.css',
+  './js/app.js',
+  './manifest.json',
+  './icon-192.png',
+  './logo.png'
+];
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(clients.claim());
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
 });
 
 self.addEventListener('fetch', (e) => {
-  // Ignore local server requests (e.g. localhost API endpoints)
-  if (e.request.url.includes('localhost')) {
-    return;
-  }
-
-  if (e.request.mode === 'navigate' || e.request.destination === 'document' || e.request.destination === 'script') {
-    e.respondWith(
-      fetch(e.request)
-        .then((response) => {
-          const resClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
-          return response;
-        })
-        .catch(() => caches.match(e.request))
-    );
-  } else {
-    e.respondWith(
-      caches.match(e.request).then((response) => {
-        return response || fetch(e.request);
-      })
-    );
-  }
+  e.respondWith(
+    caches.match(e.request).then((res) => res || fetch(e.request))
+  );
 });
