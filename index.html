@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Nunito:wght@400;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/styles.css?v=8" />
+  <link rel="stylesheet" href="css/styles.css?v=9" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -77,19 +77,8 @@
       </div>
     </div>
 
-    <!-- Notifications Card -->
-    <div class="card">
-      <div class="card-header">
-        <span class="icon">🔔</span>
-        <h2>Break Notifications</h2>
-      </div>
-      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Schedule a 3-second break check-in notification.</p>
-      <button class="btn secondary" onclick="scheduleNotification()">Trigger Notification</button>
-      <div id="notifStatus" class="status-msg"></div>
-    </div>
-
     <!-- Live Noise Monitor Card -->
-    <div class="card">
+    <div class="card" style="grid-column: 1 / -1;">
       <div class="card-header">
         <span class="icon">🎙️</span>
         <h2>Live Noise Monitor</h2>
@@ -187,35 +176,48 @@
         <div style="width: 40px;"></div>
       </div>
 
-      <!-- Arduino Controller Card inside Settings -->
-      <div style="background: var(--card-inner); padding: 16px; border-radius: 16px;">
-        <div class="card-header">
-          <span class="icon">🔌</span>
-          <h2>Arduino Controller</h2>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Break Notifications Card inside Settings -->
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 16px;">
+          <div class="card-header">
+            <span class="icon">🔔</span>
+            <h2>Break Notifications</h2>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Schedule a 3-second break check-in notification.</p>
+          <button class="btn secondary" onclick="scheduleNotification()">Trigger Notification</button>
+          <div id="notifStatus" class="status-msg"></div>
         </div>
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Send custom Score & Notification payload to local server</p>
-        
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-          <div>
-            <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Score (0 - 100):</label>
-            <input type="number" id="scoreInput" min="0" max="100" value="75" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem; background: white;" />
-          </div>
 
-          <div>
-            <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Notification Exists:</label>
-            <select id="notifExistsSelect" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem; background: white;">
-              <option value="true">True</option>
-              <option value="false">False</option>
-            </select>
+        <!-- Arduino Controller Card inside Settings -->
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 16px;">
+          <div class="card-header">
+            <span class="icon">🔌</span>
+            <h2>Arduino Controller</h2>
           </div>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 12px;">Send custom Score & Notification payload to local server</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Score (0 - 100):</label>
+              <input type="number" id="scoreInput" min="0" max="100" value="75" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem; background: white;" />
+            </div>
 
-          <button class="btn primary" onclick="sendPayload()" style="margin-top: 6px;">Send Request</button>
-          <div id="status" class="status-msg"></div>
+            <div>
+              <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">Notification Exists:</label>
+              <select id="notifExistsSelect" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 1rem; background: white;">
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            </div>
+
+            <button class="btn primary" onclick="sendPayload()" style="margin-top: 6px;">Send Request</button>
+            <div id="status" class="status-msg"></div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="js/app.js?v=8"></script>
+  <script src="js/app.js?v=9"></script>
 </body>
 </html>
