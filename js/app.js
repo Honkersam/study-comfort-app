@@ -131,9 +131,11 @@ function openDailyScoreScreen() {
   const mainScreen = document.getElementById('mainScreen');
   const dailyScoreScreen = document.getElementById('dailyScoreScreen');
   const weekAvgScreen = document.getElementById('weekAvgScreen');
+  const settingsScreen = document.getElementById('settingsScreen');
 
   mainScreen.classList.add('hidden');
   weekAvgScreen.classList.remove('active');
+  settingsScreen.classList.remove('active');
   dailyScoreScreen.classList.add('active');
 
   window.location.hash = 'daily-score';
@@ -143,9 +145,11 @@ function openWeekAvgScreen() {
   const mainScreen = document.getElementById('mainScreen');
   const dailyScoreScreen = document.getElementById('dailyScoreScreen');
   const weekAvgScreen = document.getElementById('weekAvgScreen');
+  const settingsScreen = document.getElementById('settingsScreen');
 
   mainScreen.classList.add('hidden');
   dailyScoreScreen.classList.remove('active');
+  settingsScreen.classList.remove('active');
   weekAvgScreen.classList.add('active');
 
   renderPastDaysList();
@@ -154,13 +158,29 @@ function openWeekAvgScreen() {
   window.location.hash = 'week-avg';
 }
 
+function openSettingsScreen() {
+  const mainScreen = document.getElementById('mainScreen');
+  const dailyScoreScreen = document.getElementById('dailyScoreScreen');
+  const weekAvgScreen = document.getElementById('weekAvgScreen');
+  const settingsScreen = document.getElementById('settingsScreen');
+
+  mainScreen.classList.add('hidden');
+  dailyScoreScreen.classList.remove('active');
+  weekAvgScreen.classList.remove('active');
+  settingsScreen.classList.add('active');
+
+  window.location.hash = 'settings';
+}
+
 function closeScreens() {
   const mainScreen = document.getElementById('mainScreen');
   const dailyScoreScreen = document.getElementById('dailyScoreScreen');
   const weekAvgScreen = document.getElementById('weekAvgScreen');
+  const settingsScreen = document.getElementById('settingsScreen');
 
   dailyScoreScreen.classList.remove('active');
   weekAvgScreen.classList.remove('active');
+  settingsScreen.classList.remove('active');
   mainScreen.classList.remove('hidden');
 
   if (window.location.hash) {
@@ -174,6 +194,8 @@ window.addEventListener('popstate', () => {
     openDailyScoreScreen();
   } else if (window.location.hash === '#week-avg') {
     openWeekAvgScreen();
+  } else if (window.location.hash === '#settings') {
+    openSettingsScreen();
   } else {
     closeScreens();
   }
@@ -189,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
     openDailyScoreScreen();
   } else if (window.location.hash === '#week-avg') {
     openWeekAvgScreen();
+  } else if (window.location.hash === '#settings') {
+    openSettingsScreen();
   } else {
     closeScreens();
   }
