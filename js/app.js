@@ -129,8 +129,7 @@ function renderPastDaysList() {
   listContainer.innerHTML = '';
 
   dayNames.forEach((name, idx) => {
-    const row = document.createElement('div');
-    row.className = 'day-row';
+    const row = document.className = 'day-row';
 
     const nameEl = document.createElement('div');
     nameEl.className = 'day-name';
@@ -243,7 +242,8 @@ let payloadIntervalId = null;
 
 // Break Timer Notification Logic
 let breakTimerId = null;
-let activeNotifCount = 0; // Remains true for 3 payload cycles (~15s) when triggered
+let activeNotifCount = 0; // Tracks remaining payloads with notifExists: true
+let lastPayloadState = { score: 50, decible: 40, colour: 'green' };
 
 function getColorZone(db) {
   if (db < 50) return 'green';
@@ -259,7 +259,7 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
-// Trigger desktop break notification + set notifExists: true
+// Trigger desktop break notification + IMMEDIATE POST payload with notifExists: true
 function triggerBreakCheckin() {
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification('Protogen Study Comfort', {
@@ -267,17 +267,41 @@ function triggerBreakCheckin() {
       icon: 'icon-192.png'
     });
   }
-  // Set notifExists true for next 3 payload cycles (~15 seconds)
-  activeNotifCount = 3;
-  console.log("Break Notification Triggered! notifExists will be TRUE for next 3 payload cycles.");
+
+  activeNotifCount = 3; // Keep true for next 3 regular payloads
+
+  // Send IMMEDIATE payload with exact most recent values and notifExists: true
+  const immediatePayload = {
+    score: lastPayloadState.score,
+    decible: lastPayloadState.decible,
+    colour: lastPayloadState.colour,
+    notifExists: true
+  };
+
+  console.log("Break Notification Triggered! Sending IMMEDIATE Payload:", immediatePayload);
+
+  fetch('https://localhost:3001/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(immediatePayload)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.text();
+  })
+  .then(text => console.log("Immediate Break Payload Success:", text))
+  .catch(err => console.warn("Immediate Break Payload Error:", err.message));
 }
 
 function sendAutomated5SecPayload() {
-  if (!isMonitoringMic || fiveSecWindowSamples.length === 0) return;
+  if (!isMonitoringMic) return;
 
-  const sum = fiveSecWindowSamples.reduce((a, b) => a + b, 0);
-  const avg5SecDb = Math.round(sum / fiveSecWindowSamples.length);
-  fiveSecWindowSamples = [];
+  let avg5SecDb = lastPayloadState.decible;
+  if (fiveSecWindowSamples.length > 0) {
+    const sum = fiveSecWindowSamples.reduce((a, b) => a + b, 0);
+    avg5SecDb = Math.round(sum / fiveSecWindowSamples.length);
+    fiveSecWindowSamples = [];
+  }
 
   const activeColor = getColorZone(avg5SecDb);
   const recentScore = getMostRecentDailyScore();
@@ -295,6 +319,9 @@ function sendAutomated5SecPayload() {
     notifExists: notifExists
   };
 
+  // Cache state for immediate break payload reuse
+  lastPayloadState = { score: recentScore, decible: avg5SecDb, colour: activeColor };
+
   console.log("Sending 5-Sec Window Payload:", payload);
 
   fetch('https://localhost:3001/send', {
@@ -306,12 +333,8 @@ function sendAutomated5SecPayload() {
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return res.text();
   })
-  .then(text => {
-    console.log("Backend POST Success:", text);
-  })
-  .catch(err => {
-    console.warn("Backend POST Error (local server offline?):", err.message);
-  });
+  .then(text => console.log("Backend POST Success:", text))
+  .catch(err => console.warn("Backend POST Error (local server offline?):", err.message));
 }
 
 async function toggleMicMonitor() {
@@ -764,7 +787,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const displayEl = document.getElementById('currentUserDisplay');
   if (displayEl) displayEl.textContent = currentUser;
 
-  // Listen to Break Check-in Interval changes and auto-save per user
   const breakInput = document.getElementById('breakTimerInput');
   if (breakInput) {
     breakInput.addEventListener('input', (e) => {
