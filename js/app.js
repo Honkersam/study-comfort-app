@@ -310,14 +310,8 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Time-Series Timeline Buffer
-const MAX_TIMELINE_POINTS = 60;
-let timelineSamples = [];
-let sessionSumDb = 0;
-let livePeak = 0;
-
-// Web Worker for un-throttled background timer
-let audioWorker = null;
+// Robust Fallback 1s Interval Timer
+let payloadIntervalId = null;
 let oneSecWindowSamples = [];
 
 // Break Timer Notification Logic
@@ -458,18 +452,11 @@ async function toggleMicMonitor() {
       livePeak = 0;
       activeNotifCount = 0;
 
-      logBackendMessage("=== Study Session Started (Web Worker Timer Active) ===", true);
+      logBackendMessage("=== Study Session Started ===", true);
 
-      // Start Web Worker Timer for background payload execution
-      if (!audioWorker) {
-        audioWorker = new Worker('js/audio-worker.js');
-        audioWorker.onmessage = function(e) {
-          if (e.data === 'tick') {
-            sendAutomated1SecPayload();
-          }
-        };
-      }
-      audioWorker.postMessage('start');
+      // Main 1s Payload Interval
+      if (payloadIntervalId) clearInterval(payloadIntervalId);
+      payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
 
       // Start Break Check-in Timer
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
@@ -583,7 +570,7 @@ function resampleTimeline(rawSamples, targetSize) {
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
-  if (audioWorker) audioWorker.postMessage('stop');
+  if (payloadIntervalId) clearInterval(payloadIntervalId);
   if (breakTimerId) clearInterval(breakTimerId);
 
   if (micStream) micStream.getTracks().forEach(track => track.stop());
