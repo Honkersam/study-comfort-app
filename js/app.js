@@ -310,8 +310,8 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Robust Fallback 1s Interval Timer
-let payloadIntervalId = null;
+// Hybrid Timer Strategy: Web Worker Timer + Main Thread Fetch
+let timerWorker = null;
 let oneSecWindowSamples = [];
 
 // Break Timer Notification Logic
@@ -406,6 +406,7 @@ function sendAutomated1SecPayload() {
 
   lastSentPayload = { score: recentScore, decible: avg1SecDb, colour: activeColor };
 
+  // Fetch executed cleanly on main window thread (avoids Web Worker CORS/TLS block)
   fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -452,11 +453,24 @@ async function toggleMicMonitor() {
       livePeak = 0;
       activeNotifCount = 0;
 
-      logBackendMessage("=== Study Session Started ===", true);
+      logBackendMessage("=== Study Session Started (Web Worker Hybrid Timer Active) ===", true);
 
-      // Main 1s Payload Interval
-      if (payloadIntervalId) clearInterval(payloadIntervalId);
-      payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
+      // Start Web Worker Timer for un-throttled background tick dispatch
+      try {
+        if (!timerWorker) {
+          timerWorker = new Worker('js/audio-worker.js');
+          timerWorker.onmessage = function(e) {
+            if (e.data === 'tick') {
+              sendAutomated1SecPayload();
+            }
+          };
+        }
+        timerWorker.postMessage('start');
+      } catch(e) {
+        console.warn("Worker creation fallback to setInterval:", e);
+        if (payloadIntervalId) clearInterval(payloadIntervalId);
+        payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
+      }
 
       // Start Break Check-in Timer
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
@@ -570,6 +584,7 @@ function resampleTimeline(rawSamples, targetSize) {
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
+  if (timerWorker) timerWorker.postMessage('stop');
   if (payloadIntervalId) clearInterval(payloadIntervalId);
   if (breakTimerId) clearInterval(breakTimerId);
 
