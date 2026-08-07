@@ -1,6 +1,6 @@
 {
-  "name": "UW EnviroSync",
-  "short_name": "EnviroSync",
+  "name": "UW StudySense",
+  "short_name": "StudySense",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#ffe4c9",

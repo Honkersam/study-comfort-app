@@ -1,4 +1,4 @@
-const CACHE_NAME = 'uw-envirosync-v1';
+const CACHE_NAME = 'uw-studysense-v1';
 const ASSETS = [
   './',
   './index.html',
