@@ -313,7 +313,6 @@ let isMonitoringMic = false;
 // Timers
 let timerWorker = null;
 let payloadIntervalId = null;
-let oneSecWindowSamples = [];
 
 // Break Timer Notification Logic
 let breakTimerId = null;
@@ -328,7 +327,7 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
-// Direct Instant Audio Frame Sample
+// Direct Instant Audio Frame Sample at this exact moment
 function sampleMicDirectly() {
   if (!micAnalyser) return lastSentPayload.decible;
   const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
@@ -382,15 +381,10 @@ function triggerBreakCheckin() {
 function sendAutomated1SecPayload() {
   if (!isMonitoringMic) return;
 
-  let avg1SecDb = sampleMicDirectly();
+  // Exact instantaneous noise reading sampled directly from the mic at this moment
+  const instantDb = sampleMicDirectly();
 
-  if (oneSecWindowSamples.length > 0) {
-    const sum = oneSecWindowSamples.reduce((a, b) => a + b, 0);
-    avg1SecDb = Math.round(sum / oneSecWindowSamples.length);
-    oneSecWindowSamples = [];
-  }
-
-  const activeColor = getColorZone(avg1SecDb);
+  const activeColor = getColorZone(instantDb);
   const recentScore = getMostRecentDailyScore();
 
   const notifExists = (activeNotifCount > 0);
@@ -400,12 +394,12 @@ function sendAutomated1SecPayload() {
 
   const payload = {
     score: recentScore,
-    decible: avg1SecDb,
+    decible: instantDb,
     colour: activeColor,
     notifExists: notifExists
   };
 
-  lastSentPayload = { score: recentScore, decible: avg1SecDb, colour: activeColor };
+  lastSentPayload = { score: recentScore, decible: instantDb, colour: activeColor };
 
   fetch('https://localhost:3001/send', {
     method: 'POST',
@@ -417,10 +411,10 @@ function sendAutomated1SecPayload() {
     return res.text();
   })
   .then(text => {
-    logBackendMessage(`✓ 1s Payload Sent (db:${avg1SecDb}, color:${activeColor}, notif:${notifExists}) -> ${text}`, true);
+    logBackendMessage(`✓ 1s Payload Sent (db:${instantDb}, color:${activeColor}, notif:${notifExists}) -> ${text}`, true);
   })
   .catch(err => {
-    logBackendMessage(`✗ 1s Payload Error (db:${avg1SecDb}, color:${activeColor}, notif:${notifExists}) -> ${err.message}`, false);
+    logBackendMessage(`✗ 1s Payload Error (db:${instantDb}, color:${activeColor}, notif:${notifExists}) -> ${err.message}`, false);
   });
 }
 
@@ -448,7 +442,6 @@ async function toggleMicMonitor() {
 
       isMonitoringMic = true;
       timelineSamples = [];
-      oneSecWindowSamples = [];
       sessionSumDb = 0;
       livePeak = 0;
       activeNotifCount = 0;
@@ -505,7 +498,6 @@ async function toggleMicMonitor() {
         if (rawDb > 95) rawDb = 95;
 
         sessionSumDb += rawDb;
-        oneSecWindowSamples.push(rawDb);
 
         if (rawDb > livePeak) {
           livePeak = rawDb;
