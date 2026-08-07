@@ -310,34 +310,15 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Background Silent Audio Loop (Keeps Web Audio API Active in Background)
-let silentAudioEl = null;
-
-function startSilentAudioLoop() {
-  if (!silentAudioEl) {
-    silentAudioEl = document.createElement('audio');
-    silentAudioEl.loop = true;
-    // 1-second silent MP3 data URI
-    silentAudioEl.src = 'data:audio/mp3;base64,SUQ3BAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//54AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-  }
-  silentAudioEl.play().catch(e => console.warn("Background audio play prevented:", e));
-}
-
-function stopSilentAudioLoop() {
-  if (silentAudioEl) {
-    silentAudioEl.pause();
-  }
-}
-
 // Time-Series Timeline Buffer
 const MAX_TIMELINE_POINTS = 60;
 let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Automatic Backend Payload Sender Logic (Every 1 Second)
+// Web Worker for un-throttled background timer
+let audioWorker = null;
 let oneSecWindowSamples = [];
-let payloadIntervalId = null;
 
 // Break Timer Notification Logic
 let breakTimerId = null;
@@ -350,6 +331,24 @@ function getMostRecentDailyScore() {
     return Math.round(total / todaySessions.length);
   }
   return weekScores[6] || 50;
+}
+
+// Direct Instant Background Audio Frame Sample
+function sampleMicDirectly() {
+  if (!micAnalyser) return lastSentPayload.decible;
+  const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getByteFrequencyData(dataArray);
+
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    sum += dataArray[i] * dataArray[i];
+  }
+  const rms = Math.sqrt(sum / dataArray.length);
+
+  let rawDb = Math.round(30 + (rms / 200) * 55);
+  if (rawDb < 30) rawDb = 30;
+  if (rawDb > 95) rawDb = 95;
+  return rawDb;
 }
 
 // Trigger break notification + IMMEDIATE payload with exact last sent payload values and notifExists: true
@@ -388,7 +387,8 @@ function triggerBreakCheckin() {
 function sendAutomated1SecPayload() {
   if (!isMonitoringMic) return;
 
-  let avg1SecDb = lastSentPayload.decible;
+  let avg1SecDb = sampleMicDirectly();
+
   if (oneSecWindowSamples.length > 0) {
     const sum = oneSecWindowSamples.reduce((a, b) => a + b, 0);
     avg1SecDb = Math.round(sum / oneSecWindowSamples.length);
@@ -458,13 +458,18 @@ async function toggleMicMonitor() {
       livePeak = 0;
       activeNotifCount = 0;
 
-      // Start Silent Audio Loop to keep Web Audio API active in background
-      startSilentAudioLoop();
+      logBackendMessage("=== Study Session Started (Web Worker Timer Active) ===", true);
 
-      logBackendMessage("=== Study Session Started (Silent Audio Loop Active) ===", true);
-
-      // 1-second interval timer for backend POSTs
-      payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
+      // Start Web Worker Timer for background payload execution
+      if (!audioWorker) {
+        audioWorker = new Worker('js/audio-worker.js');
+        audioWorker.onmessage = function(e) {
+          if (e.data === 'tick') {
+            sendAutomated1SecPayload();
+          }
+        };
+      }
+      audioWorker.postMessage('start');
 
       // Start Break Check-in Timer
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
@@ -578,10 +583,8 @@ function resampleTimeline(rawSamples, targetSize) {
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
-  if (payloadIntervalId) clearInterval(payloadIntervalId);
+  if (audioWorker) audioWorker.postMessage('stop');
   if (breakTimerId) clearInterval(breakTimerId);
-
-  stopSilentAudioLoop();
 
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
