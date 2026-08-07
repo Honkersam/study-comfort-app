@@ -23,8 +23,12 @@ function getPast7DaysNames() {
   return dayNames;
 }
 
-const DEFAULT_SCORES = [56, 24, 32, 41, 87, 65, 42];
-let weekScores = [...DEFAULT_SCORES];
+// Generate realistic randomized 7-day score array for new profiles
+function generateRandomWeeklyScores() {
+  return Array.from({ length: 7 }, () => Math.floor(Math.random() * 65) + 30); // Random scores between 30 and 95
+}
+
+let weekScores = generateRandomWeeklyScores();
 
 function getUserStorageKey(username) {
   const slug = username.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-') || 'user-1';
@@ -59,6 +63,8 @@ function loadUserScores() {
       if (data) {
         if (Array.isArray(data.weekScores) && data.weekScores.length === 7) {
           weekScores = data.weekScores.map(n => Math.min(100, Math.max(0, parseInt(n, 10) || 0)));
+        } else {
+          weekScores = generateRandomWeeklyScores();
         }
         todaySessions = Array.isArray(data.todaySessions) ? data.todaySessions : [];
         breakIntervalMins = typeof data.breakIntervalMins === 'number' ? data.breakIntervalMins : 20;
@@ -77,13 +83,16 @@ function loadUserScores() {
     } catch(e) {}
   }
 
-  weekScores = [...DEFAULT_SCORES];
+  // If new profile (no cached record exists), generate randomized weekly scores
+  weekScores = generateRandomWeeklyScores();
   todaySessions = [];
   breakIntervalMins = 20;
   sensitivityMode = 'regular';
 
   const breakInput = document.getElementById('breakTimerInput');
   if (breakInput) breakInput.value = 20;
+
+  saveUserScores(); // Save initial generated randomized profile record
 
   updateSensitivityUI();
   renderPastDaysList();
@@ -328,7 +337,7 @@ function getMostRecentDailyScore() {
 // Trigger break notification + IMMEDIATE payload with exact last sent payload values and notifExists: true
 function triggerBreakCheckin() {
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('Protogen Study Comfort', {
+    new Notification('UW EnviroSync', {
       body: '🧘 Time for a quick break check-in! Stretch your legs and rest your eyes.',
       icon: 'icon-192.png'
     });
@@ -698,7 +707,7 @@ function triggerNewDayForAllUsers() {
   keys.forEach(key => {
     try {
       const raw = localStorage.getItem(key);
-      let userData = raw ? JSON.parse(raw) : { weekScores: [...DEFAULT_SCORES], todaySessions: [] };
+      let userData = raw ? JSON.parse(raw) : { weekScores: generateRandomWeeklyScores(), todaySessions: [] };
       
       let finalDailyScore = 0;
       if (userData.todaySessions && userData.todaySessions.length > 0) {
@@ -712,7 +721,7 @@ function triggerNewDayForAllUsers() {
         userData.weekScores.shift();
         userData.weekScores.push(finalDailyScore);
       } else {
-        userData.weekScores = [24, 32, 41, 87, 65, 42, finalDailyScore];
+        userData.weekScores = generateRandomWeeklyScores();
       }
 
       userData.todaySessions = [];
@@ -926,7 +935,7 @@ async function scheduleNotification() {
 
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      new Notification('Protogen Study Comfort', {
+      new Notification('UW EnviroSync', {
         body: '🧘 Time for a quick posture & eye comfort check!',
         icon: 'icon-192.png'
       });
