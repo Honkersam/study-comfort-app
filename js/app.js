@@ -348,7 +348,7 @@ function sampleMicDirectly() {
 // Trigger break notification + IMMEDIATE payload with exact last sent payload values and notifExists: true
 function triggerBreakCheckin() {
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('UW EnviroSync', {
+    new Notification('UW StudySense', {
       body: '🧘 Time for a quick break check-in! Stretch your legs and rest your eyes.',
       icon: 'icon-192.png'
     });
@@ -406,7 +406,6 @@ function sendAutomated1SecPayload() {
 
   lastSentPayload = { score: recentScore, decible: avg1SecDb, colour: activeColor };
 
-  // Fetch executed cleanly on main window thread (avoids Web Worker CORS/TLS block)
   fetch('https://localhost:3001/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -968,7 +967,7 @@ async function scheduleNotification() {
 
   if ('Notification' in window) {
     if (Notification.permission === 'granted') {
-      new Notification('UW EnviroSync', {
+      new Notification('UW StudySense', {
         body: '🧘 Time for a quick posture & eye comfort check!',
         icon: 'icon-192.png'
       });
