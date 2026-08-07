@@ -310,7 +310,7 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
-// Hybrid Timer Strategy: Web Worker Timer + Main Thread Fetch
+// Timers
 let timerWorker = null;
 let payloadIntervalId = null;
 let oneSecWindowSamples = [];
@@ -328,7 +328,7 @@ function getMostRecentDailyScore() {
   return weekScores[6] || 50;
 }
 
-// Direct Instant Background Audio Frame Sample
+// Direct Instant Audio Frame Sample
 function sampleMicDirectly() {
   if (!micAnalyser) return lastSentPayload.decible;
   const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
@@ -455,7 +455,7 @@ async function toggleMicMonitor() {
 
       logBackendMessage("=== Study Session Started ===", true);
 
-      // Start Web Worker Timer for un-throttled background tick dispatch
+      // Web Worker Timer
       try {
         if (!timerWorker) {
           timerWorker = new Worker('js/audio-worker.js');
@@ -476,10 +476,12 @@ async function toggleMicMonitor() {
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
       breakTimerId = setInterval(triggerBreakCheckin, breakMs);
 
-      micBtn.textContent = 'End Session';
-      micBtn.className = 'btn secondary';
-      micBtn.style.borderColor = 'var(--danger)';
-      micBtn.style.color = 'var(--danger)';
+      if (micBtn) {
+        micBtn.textContent = 'End Session';
+        micBtn.className = 'btn secondary';
+        micBtn.style.borderColor = 'var(--danger)';
+        micBtn.style.color = 'var(--danger)';
+      }
 
       if (liveStatsContainer) liveStatsContainer.style.display = 'block';
       if (postSessionCard) postSessionCard.style.display = 'none';
@@ -514,31 +516,39 @@ async function toggleMicMonitor() {
           timelineSamples.push(rawDb);
         }
 
-        dbVal.textContent = `${rawDb} dB`;
+        if (dbVal) dbVal.textContent = `${rawDb} dB`;
         
         let percent = Math.min(100, Math.max(0, ((rawDb - 30) / 60) * 100));
-        meterBar.style.width = `${percent}%`;
+        if (meterBar) meterBar.style.width = `${percent}%`;
 
         const currentAvg = Math.round(sessionSumDb / Math.max(1, frameCounter));
-        document.getElementById('liveAvgDb').textContent = `${currentAvg} dB`;
-        document.getElementById('livePeakDb').textContent = `${livePeak} dB`;
+        const liveAvgEl = document.getElementById('liveAvgDb');
+        const livePeakEl = document.getElementById('livePeakDb');
+        if (liveAvgEl) liveAvgEl.textContent = `${currentAvg} dB`;
+        if (livePeakEl) livePeakEl.textContent = `${livePeak} dB`;
 
         const activeZone = getColorZone(rawDb);
         if (activeZone === 'green') {
-          dbVal.style.color = 'var(--success)';
-          meterBar.style.backgroundColor = 'var(--success)';
-          noiseLabel.textContent = 'Quiet Study Session 🤫';
-          noiseLabel.style.color = 'var(--success)';
+          if (dbVal) dbVal.style.color = 'var(--success)';
+          if (meterBar) meterBar.style.backgroundColor = 'var(--success)';
+          if (noiseLabel) {
+            noiseLabel.textContent = 'Quiet Study Session 🤫';
+            noiseLabel.style.color = 'var(--success)';
+          }
         } else if (activeZone === 'yellow') {
-          dbVal.style.color = 'var(--warning)';
-          meterBar.style.backgroundColor = 'var(--warning)';
-          noiseLabel.textContent = 'Moderate Noise Level ☕';
-          noiseLabel.style.color = 'var(--warning)';
+          if (dbVal) dbVal.style.color = 'var(--warning)';
+          if (meterBar) meterBar.style.backgroundColor = 'var(--warning)';
+          if (noiseLabel) {
+            noiseLabel.textContent = 'Moderate Noise Level ☕';
+            noiseLabel.style.color = 'var(--warning)';
+          }
         } else {
-          dbVal.style.color = 'var(--danger)';
-          meterBar.style.backgroundColor = 'var(--danger)';
-          noiseLabel.textContent = 'High Noise Spikes Detected 🔊';
-          noiseLabel.style.color = 'var(--danger)';
+          if (dbVal) dbVal.style.color = 'var(--danger)';
+          if (meterBar) meterBar.style.backgroundColor = 'var(--danger)';
+          if (noiseLabel) {
+            noiseLabel.textContent = 'High Noise Spikes Detected 🔊';
+            noiseLabel.style.color = 'var(--danger)';
+          }
         }
 
         micAnimId = requestAnimationFrame(updateNoiseLevel);
@@ -600,22 +610,16 @@ function stopMicMonitor() {
     breakTimerId = null;
   }
 
-  try {
-    if (micStream) {
+  if (micStream) {
+    try {
       micStream.getTracks().forEach(track => track.stop());
-      micStream = null;
-    }
-    if (micContext && micContext.state !== 'closed') {
-      micContext.close();
-      micContext = null;
-    }
-  } catch(e) {
-    console.warn("Audio close cleanup warning:", e);
+    } catch(e) {}
+    micStream = null;
   }
 
   logBackendMessage("=== Study Session Ended ===", true);
 
-  let sessionWaveform = resampleTimeline(timelineSamples, MAX_TIMELINE_POINTS);
+  let sessionWaveform = resampleTimeline(timelineSamples, 40);
 
   if (timelineSamples.length > 0) {
     const total = timelineSamples.reduce((a, b) => a + b, 0);
@@ -626,6 +630,7 @@ function stopMicMonitor() {
     sessionPeakDb = 58;
   }
 
+  // Restore Button UI
   const micBtn = document.getElementById('micBtn');
   if (micBtn) {
     micBtn.textContent = 'Start Session';
@@ -649,8 +654,11 @@ function stopMicMonitor() {
     noiseLabel.style.color = 'var(--text-muted)';
   }
 
+  // Display Post-Session Rating Prompt Card
   const postSessionCard = document.getElementById('postSessionCard');
-  if (postSessionCard) postSessionCard.style.display = 'block';
+  if (postSessionCard) {
+    postSessionCard.style.display = 'block';
+  }
 
   window.lastSessionWaveform = sessionWaveform;
 }
