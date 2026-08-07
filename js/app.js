@@ -310,15 +310,34 @@ let micAnalyser = null;
 let micAnimId = null;
 let isMonitoringMic = false;
 
+// Background Silent Audio Loop (Keeps Web Audio API Active in Background)
+let silentAudioEl = null;
+
+function startSilentAudioLoop() {
+  if (!silentAudioEl) {
+    silentAudioEl = document.createElement('audio');
+    silentAudioEl.loop = true;
+    // 1-second silent MP3 data URI
+    silentAudioEl.src = 'data:audio/mp3;base64,SUQ3BAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//54AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+  }
+  silentAudioEl.play().catch(e => console.warn("Background audio play prevented:", e));
+}
+
+function stopSilentAudioLoop() {
+  if (silentAudioEl) {
+    silentAudioEl.pause();
+  }
+}
+
 // Time-Series Timeline Buffer
 const MAX_TIMELINE_POINTS = 60;
 let timelineSamples = [];
 let sessionSumDb = 0;
 let livePeak = 0;
 
-// Web Worker for un-throttled background payload ticks
-let audioWorker = null;
+// Automatic Backend Payload Sender Logic (Every 1 Second)
 let oneSecWindowSamples = [];
+let payloadIntervalId = null;
 
 // Break Timer Notification Logic
 let breakTimerId = null;
@@ -366,30 +385,10 @@ function triggerBreakCheckin() {
   .catch(err => logBackendMessage(`✗ Immediate Break POST Error: ${err.message}`, false));
 }
 
-// Direct Instant Background Audio Frame Sample (when requestAnimationFrame is throttled)
-function sampleMicDirectly() {
-  if (!micAnalyser) return 40;
-  const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
-  micAnalyser.getByteFrequencyData(dataArray);
-
-  let sum = 0;
-  for (let i = 0; i < dataArray.length; i++) {
-    sum += dataArray[i] * dataArray[i];
-  }
-  const rms = Math.sqrt(sum / dataArray.length);
-
-  let rawDb = Math.round(30 + (rms / 200) * 55);
-  if (rawDb < 30) rawDb = 30;
-  if (rawDb > 95) rawDb = 95;
-  return rawDb;
-}
-
 function sendAutomated1SecPayload() {
   if (!isMonitoringMic) return;
 
-  // Sample microphone directly if animation frames are throttled in background
-  let avg1SecDb = sampleMicDirectly();
-
+  let avg1SecDb = lastSentPayload.decible;
   if (oneSecWindowSamples.length > 0) {
     const sum = oneSecWindowSamples.reduce((a, b) => a + b, 0);
     avg1SecDb = Math.round(sum / oneSecWindowSamples.length);
@@ -443,7 +442,6 @@ async function toggleMicMonitor() {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micContext = new (window.AudioContext || window.webkitAudioContext)();
       
-      // Ensure AudioContext state is running
       if (micContext.state === 'suspended') {
         await micContext.resume();
       }
@@ -460,18 +458,13 @@ async function toggleMicMonitor() {
       livePeak = 0;
       activeNotifCount = 0;
 
-      logBackendMessage("=== Study Session Started (Un-throttled Worker Active) ===", true);
+      // Start Silent Audio Loop to keep Web Audio API active in background
+      startSilentAudioLoop();
 
-      // Start Web Worker for un-throttled background 1s payload ticks
-      if (!audioWorker) {
-        audioWorker = new Worker('js/audio-worker.js');
-        audioWorker.onmessage = function(e) {
-          if (e.data === 'tick') {
-            sendAutomated1SecPayload();
-          }
-        };
-      }
-      audioWorker.postMessage('start');
+      logBackendMessage("=== Study Session Started (Silent Audio Loop Active) ===", true);
+
+      // 1-second interval timer for backend POSTs
+      payloadIntervalId = setInterval(sendAutomated1SecPayload, 1000);
 
       // Start Break Check-in Timer
       const breakMs = Math.max(1000, Math.round(breakIntervalMins * 60 * 1000));
@@ -585,8 +578,10 @@ function resampleTimeline(rawSamples, targetSize) {
 function stopMicMonitor() {
   isMonitoringMic = false;
   if (micAnimId) cancelAnimationFrame(micAnimId);
-  if (audioWorker) audioWorker.postMessage('stop');
+  if (payloadIntervalId) clearInterval(payloadIntervalId);
   if (breakTimerId) clearInterval(breakTimerId);
+
+  stopSilentAudioLoop();
 
   if (micStream) micStream.getTracks().forEach(track => track.stop());
   if (micContext) micContext.close();
